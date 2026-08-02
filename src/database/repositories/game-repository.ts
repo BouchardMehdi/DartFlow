@@ -20,3 +20,9 @@ export async function deleteSavedGame(id: string): Promise<void> {
   if (typeof indexedDB === "undefined") return;
   await database.games.delete(id);
 }
+
+export async function loadCompletedGames(): Promise<GameState[]> {
+  if (typeof indexedDB === "undefined") return [];
+  const saved = await database.games.where("status").equals("completed").reverse().sortBy("completedAt");
+  return saved.flatMap((game) => { const parsed = gameStateSchema.safeParse(game); return parsed.success ? [parsed.data as GameState] : []; }).reverse();
+}

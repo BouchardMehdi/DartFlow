@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { countUpConfigSchema, x01ConfigSchema } from "@/src/database/schemas";
 import type { Player, X01EntryRule, X01ExitRule } from "@/src/game-engine/types";
 import { useGameStore } from "@/src/stores/game-store";
+import { loadPlayers } from "@/src/database/repositories/player-repository";
+import type { SavedPlayer } from "@/src/database/database";
 
 const COLORS = ["#c8f03d", "#ff6b35", "#57b8ff", "#f25f8b", "#b99cff", "#45d6a8", "#ffd166", "#f28f3b"];
 const makePlayer = (index: number): Player => ({ id: crypto.randomUUID(), name: `Joueur ${index + 1}`, color: COLORS[index] ?? "#c8f03d", order: index });
@@ -30,6 +32,8 @@ export function NewGameForm() {
   const [randomOrder, setRandomOrder] = useState(false);
   const [entryRule, setEntryRule] = useState<X01EntryRule>("straight");
   const [exitRule, setExitRule] = useState<X01ExitRule>("double");
+  const [savedPlayers, setSavedPlayers] = useState<SavedPlayer[]>([]);
+  useEffect(() => { let active = true; void loadPlayers().then((profiles) => { if (active) setSavedPlayers(profiles); }).catch(() => undefined); return () => { active = false; }; }, []);
   const validation = useMemo(() => mode === "count-up"
     ? countUpConfigSchema.safeParse({ players, rounds })
     : x01ConfigSchema.safeParse({ players, startingScore: Number(mode), entryRule, exitRule, rounds }), [players, rounds, mode, entryRule, exitRule]);
@@ -47,6 +51,16 @@ export function NewGameForm() {
     if (mode === "count-up") start(ordered, rounds ?? 8);
     else startX01(ordered, Number(mode) as 301 | 501 | 701, entryRule, exitRule, rounds);
     router.push("/game");
+  };
+
+  const selectProfile = (profile: SavedPlayer) => {
+    setPlayers((current) => {
+      if (current.some((player) => player.id === profile.id)) return current;
+      const replaceIndex = current.findIndex((player) => /^Joueur \d+$/.test(player.name));
+      if (replaceIndex >= 0) return current.map((player, index) => index === replaceIndex ? { id: profile.id, name: profile.name, order: player.order, ...(profile.color ? { color: profile.color } : {}) } : player);
+      if (current.length >= 8) return current;
+      return [...current, { id: profile.id, name: profile.name, order: current.length, ...(profile.color ? { color: profile.color } : {}) }];
+    });
   };
 
   return (
@@ -73,6 +87,7 @@ export function NewGameForm() {
 
         <section className="rounded-[1.6rem] border border-[var(--line)] bg-[var(--panel)] p-5">
           <span className="text-xs font-black uppercase tracking-[.18em] text-[var(--lime)]">03 · Joueurs</span>
+          {savedPlayers.length > 0 && <div className="mt-4 rounded-xl bg-black/20 p-3"><p className="mb-2 text-xs font-bold uppercase tracking-[.12em] text-[var(--muted)]">Profils enregistrés</p><div className="flex flex-wrap gap-2">{savedPlayers.map((profile) => <button key={profile.id} type="button" disabled={players.some((player) => player.id === profile.id)} onClick={() => selectProfile(profile)} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-sm font-bold disabled:border-[var(--lime)] disabled:text-[var(--lime)]">{profile.name}</button>)}</div></div>}
           <div className="mt-4 flex items-center justify-between"><div><p className="font-bold">Nombre de joueurs</p><p className="text-sm text-[var(--muted)]">De 1 à 8 sur cet appareil</p></div><div className="flex items-center gap-3"><button type="button" aria-label="Retirer un joueur" disabled={players.length === 1} onClick={() => setPlayerCount(players.length - 1)} className="grid size-11 place-items-center rounded-xl border border-[var(--line)] text-xl disabled:opacity-30">−</button><strong className="w-5 text-center text-xl">{players.length}</strong><button type="button" aria-label="Ajouter un joueur" disabled={players.length === 8} onClick={() => setPlayerCount(players.length + 1)} className="grid size-11 place-items-center rounded-xl border border-[var(--line)] text-xl disabled:opacity-30">+</button></div></div>
 
           <div className="mt-5 space-y-3">{players.map((player, index) => <label key={player.id} className="flex items-center gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-full text-sm font-black text-black" style={{ background: player.color }}>{index + 1}</span><span className="sr-only">Pseudo du joueur {index + 1}</span><input value={player.name} maxLength={40} onChange={(event) => setPlayers((current) => current.map((item) => item.id === player.id ? { ...item, name: event.target.value } : item))} className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[#0d0f0e] px-4 font-bold" /></label>)}</div>

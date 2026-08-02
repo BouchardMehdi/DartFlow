@@ -15,7 +15,7 @@ export default function Home() {
         <p className="mt-6 max-w-xl text-base leading-7 text-[var(--muted)]">Créez une partie de 1 à 8 joueurs, choisissez vos règles et saisissez chaque lancer directement sur la cible.</p>
         <div className="mt-9 flex flex-col gap-3 sm:flex-row">
           <Link href="/new-game" className="grid min-h-14 place-items-center rounded-2xl bg-[var(--lime)] px-7 font-black text-black transition-transform hover:scale-[1.02]">Nouvelle partie</Link>
-          <span className="grid min-h-14 place-items-center rounded-2xl border border-[var(--line)] px-7 font-bold text-[var(--muted)]">Historique — bientôt</span>
+          <Link href="/history" className="grid min-h-14 place-items-center rounded-2xl border border-[var(--line)] px-7 font-bold text-[var(--muted)] hover:text-white">Historique</Link>
         </div>
         <ResumeGameCard />
       </section>

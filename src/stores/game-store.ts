@@ -6,6 +6,7 @@ import { createX01Game } from "@/src/game-engine/x01";
 import type { DartThrow, GameHistory, Player, X01EntryRule, X01ExitRule } from "@/src/game-engine/types";
 import type { GameState } from "@/src/game-engine/types";
 import { saveGame } from "@/src/database/repositories/game-repository";
+import { savePlayers } from "@/src/database/repositories/player-repository";
 
 interface GameStore {
   history: GameHistory;
@@ -26,8 +27,8 @@ const demoPlayers: Player[] = [
 export const useGameStore = create<GameStore>((set) => ({
   history: createHistory(createCountUpGame(demoPlayers, 8)),
   hasStarted: false,
-  start: (players, rounds) => set(() => { const history = createHistory(createCountUpGame(players, rounds)); void saveGame(history.present); return { history, hasStarted: true }; }),
-  startX01: (players, score, entry, exit, rounds) => set(() => { const history = createHistory(createX01Game(players, score, entry, exit, rounds)); void saveGame(history.present); return { history, hasStarted: true }; }),
+  start: (players, rounds) => set(() => { const history = createHistory(createCountUpGame(players, rounds)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
+  startX01: (players, score, entry, exit, rounds) => set(() => { const history = createHistory(createX01Game(players, score, entry, exit, rounds)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
   throwDart: (dart) => set((store) => {
     const result = processThrow(store.history, dart);
     useAnimationStore.getState().enqueueEvents(result.events);
