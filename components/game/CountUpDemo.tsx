@@ -1,11 +1,11 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { Dartboard } from "@/components/dartboard/Dartboard";
 import { TurnHistory } from "@/components/game/TurnHistory";
+import { FinalResults } from "@/components/game/FinalResults";
 import { AnimationOverlay } from "@/components/animations/AnimationOverlay";
 import { suggestCheckouts } from "@/src/game-engine/checkouts/checkout-service";
 import { createDart } from "@/src/game-engine/score-calculator";
@@ -65,7 +65,7 @@ export function CountUpDemo() {
 
       <p className="sr-only" aria-live="polite">{active ? `${active.name}, score ${playerScore(active.id)}` : ""}</p>
       <AnimationOverlay />
-      <AnimatePresence>{winner && <motion.div className="fixed inset-0 z-20 grid place-items-center bg-black/80 p-6 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><motion.div initial={{ y: 30, scale: .9 }} animate={{ y: 0, scale: 1 }} className="w-full max-w-sm rounded-[2rem] border border-[var(--lime)] bg-[var(--panel)] p-8 text-center"><p className="text-sm font-black uppercase tracking-[.2em] text-[var(--lime)]">Victoire</p><h2 className="mt-3 text-4xl font-black">{winner.name}</h2><p className="mt-2 text-[var(--muted)]">{isCountUp ? `${playerScore(winner.id)} points` : playerScore(winner.id) === 0 ? "Checkout réussi" : `${playerScore(winner.id)} points restants`}</p><div className="mt-6 grid grid-cols-2 gap-3"><Link href="/" className="grid min-h-12 place-items-center rounded-xl border border-[var(--line)] font-bold">Menu</Link><button className="min-h-12 rounded-xl bg-[var(--lime)] font-black text-black" onClick={() => { if (game.modeState.kind === "count-up") useGameStore.getState().start(game.players, game.modeState.maxRounds); else useGameStore.getState().startX01(game.players, game.modeState.startingScore, game.modeState.entryRule, game.modeState.exitRule, game.modeState.maxRounds); }}>Rejouer</button></div></motion.div></motion.div>}</AnimatePresence>
+      <AnimatePresence>{winner && <FinalResults game={game} onReplay={() => { if (game.modeState.kind === "count-up") useGameStore.getState().start(game.players, game.modeState.maxRounds); else useGameStore.getState().startX01(game.players, game.modeState.startingScore, game.modeState.entryRule, game.modeState.exitRule, game.modeState.maxRounds); }} />}</AnimatePresence>
     </main>
   );
 }

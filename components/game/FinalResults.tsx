@@ -1,0 +1,23 @@
+"use client";
+
+import Link from "next/link";
+import { motion } from "motion/react";
+import { getFinalStandings } from "@/src/game-engine/statistics";
+import type { GameState } from "@/src/game-engine/types";
+
+interface Props { game: GameState; onReplay: () => void; }
+
+export function FinalResults({ game, onReplay }: Props) {
+  const standings = getFinalStandings(game);
+  const winner = standings.find((standing) => standing.isWinner) ?? standings[0];
+  return <motion.div className="fixed inset-0 z-20 overflow-y-auto bg-black/90 p-4 backdrop-blur-sm sm:p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+    <motion.section initial={{ y: 30, scale: .97 }} animate={{ y: 0, scale: 1 }} aria-labelledby="final-results-title" className="mx-auto w-full max-w-3xl overflow-hidden rounded-[2rem] border border-[var(--lime)] bg-[var(--panel)] shadow-[0_0_90px_rgba(200,240,61,.12)]">
+      <header className="border-b border-[var(--line)] px-5 py-6 text-center sm:px-8"><p className="text-xs font-black uppercase tracking-[.22em] text-[var(--lime)]">Partie terminée</p><h2 id="final-results-title" className="mt-2 text-4xl font-black tracking-[-.05em]">Victoire de {winner?.name}</h2><p className="mt-2 text-sm text-[var(--muted)]">{game.modeState.kind === "count-up" ? "Classement au score total" : winner?.score === 0 ? "Checkout réussi" : "Classement au score restant"}</p></header>
+      <div className="space-y-3 p-4 sm:p-6">{standings.map((standing) => <article key={standing.playerId} className={`rounded-2xl border p-4 ${standing.isWinner ? "border-[var(--lime)] bg-[var(--lime)]/5" : "border-[var(--line)] bg-black/15"}`}>
+        <div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><span className={`grid size-9 shrink-0 place-items-center rounded-full font-black ${standing.isWinner ? "bg-[var(--lime)] text-black" : "bg-black/30"}`}>{standing.rank}</span><span className="min-w-0"><strong className="block truncate text-lg">{standing.name}</strong>{standing.isWinner && <span className="text-xs font-black uppercase tracking-[.14em] text-[var(--lime)]">Gagnant</span>}</span></div><strong className="text-3xl tabular-nums">{standing.score}<span className="ml-1 text-xs font-bold text-[var(--muted)]">{game.modeState.kind === "count-up" ? "pts" : "restants"}</span></strong></div>
+        <dl className="mt-4 grid grid-cols-2 gap-2 border-t border-[var(--line)] pt-3 text-center sm:grid-cols-4"><div><dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">Fléchettes</dt><dd className="mt-1 font-black tabular-nums">{standing.dartsThrown}</dd></div><div><dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">Meilleur tour</dt><dd className="mt-1 font-black tabular-nums">{standing.bestTurn}</dd></div><div><dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">Moyenne / tour</dt><dd className="mt-1 font-black tabular-nums">{standing.averagePerTurn.toFixed(1)}</dd></div><div><dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">Moyenne / flèche</dt><dd className="mt-1 font-black tabular-nums">{standing.averagePerDart.toFixed(1)}</dd></div></dl>
+      </article>)}</div>
+      <footer className="grid grid-cols-2 gap-3 border-t border-[var(--line)] p-4 sm:p-6"><Link href="/" className="grid min-h-13 place-items-center rounded-xl border border-[var(--line)] font-bold">Menu</Link><button type="button" onClick={onReplay} className="min-h-13 rounded-xl bg-[var(--lime)] font-black text-black">Rejouer</button></footer>
+    </motion.section>
+  </motion.div>;
+}
