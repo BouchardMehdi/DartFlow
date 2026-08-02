@@ -1,11 +1,11 @@
 import Dexie, { type EntityTable } from "dexie";
 import type { GameState, Player } from "@/src/game-engine/types";
 
-export interface SavedGame extends GameState { savedAt: string; cloudUserId?: string; cloudVersion?: number; }
-export interface SavedPlayer extends Player { createdAt: string; updatedAt: string; cloudUserId?: string; cloudRole?: "owner" | "editor" | "viewer"; ownerEmail?: string; isPublic?: boolean; }
+export interface SavedGame extends GameState { savedAt: string; cloudUserId?: string; cloudOwnerUserId?: string; cloudVersion?: number; }
+export interface SavedPlayer extends Player { createdAt: string; updatedAt: string; cloudUserId?: string; cloudRole?: "owner" | "manager" | "player"; ownerUserId?: string; ownerUsername?: string; isPublic?: boolean; }
 export interface SavedSettings { id: "main"; animations: boolean; sound: boolean; }
 export interface SyncOutboxItem { id: string; entityType: "game"; entityId: string; action: "delete"; createdAt: string; }
-export interface SyncMetadata { id: "main"; lastSyncedAt?: string; lastError?: string; }
+export interface SyncMetadata { id: "main"; activeUserId?: string; lastSyncedAt?: string; lastError?: string; }
 
 export const database = new Dexie("dartflow") as Dexie & {
   players: EntityTable<SavedPlayer, "id">;

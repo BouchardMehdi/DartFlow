@@ -3,25 +3,27 @@ import type { CloudGame, CloudProfile, SyncResponse } from "@dartflow/shared";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { pool } from "../database.js";
-import { normalizeName, remapIdentifiers } from "../domain.js";
+import { extractParticipants, normalizeName, remapIdentifiers } from "../domain.js";
 
 const profileSchema = z.object({ id: z.string().min(1).max(100), name: z.string().trim().min(1).max(40), color: z.string().max(100).optional(), avatar: z.string().max(2000).optional(), updatedAt: z.iso.datetime() });
 const gameSchema = z.object({ id: z.string().min(1).max(100), modeId: z.string().min(1).max(40), status: z.string().min(1).max(30), state: z.record(z.string(), z.unknown()), updatedAt: z.iso.datetime() });
 const syncSchema = z.object({ profiles: z.array(profileSchema).max(500), games: z.array(gameSchema).max(5000), deletedGameIds: z.array(z.string().min(1).max(100)).max(5000) });
 
-interface ProfileDbRow { id: string; name: string; normalized_name: string; color: string | null; avatar: string | null; is_public: boolean; role: "owner" | "editor" | "viewer"; owner_email: string; created_at: Date; updated_at: Date }
-interface GameDbRow { id: string; mode_id: string; status: string; state: unknown; version: number; updated_at: Date }
+interface ProfileDbRow { id: string; name: string; normalized_name: string; color: string | null; avatar: string | null; is_public: boolean; role: "owner" | "manager" | "player"; owner_user_id: string; owner_username: string; created_at: Date; updated_at: Date }
+interface GameDbRow { id: string; owner_user_id: string; mode_id: string; status: string; state: unknown; version: number; updated_at: Date }
 
-const mapProfile = (row: ProfileDbRow): CloudProfile => ({ id: row.id, name: row.name, normalizedName: row.normalized_name, ...(row.color ? { color: row.color } : {}), ...(row.avatar ? { avatar: row.avatar } : {}), isPublic: row.is_public, role: row.role, ownerEmail: row.owner_email, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() });
-const mapGame = (row: GameDbRow): CloudGame => ({ id: row.id, modeId: row.mode_id, status: row.status, state: row.state, version: row.version, updatedAt: row.updated_at.toISOString() });
+const mapProfile = (row: ProfileDbRow): CloudProfile => ({ id: row.id, name: row.name, normalizedName: row.normalized_name, ...(row.color ? { color: row.color } : {}), ...(row.avatar ? { avatar: row.avatar } : {}), isPublic: row.is_public, role: row.role, ownerUserId: row.owner_user_id, ownerUsername: row.owner_username, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() });
+const mapGame = (row: GameDbRow): CloudGame => ({ id: row.id, modeId: row.mode_id, status: row.status, state: row.state, version: row.version, ownerUserId: row.owner_user_id, updatedAt: row.updated_at.toISOString() });
 
 async function cloudState(userId: string): Promise<{ profiles: CloudProfile[]; games: CloudGame[] }> {
   const [profileResult, gameResult] = await Promise.all([
-    pool.query<ProfileDbRow>(`SELECT p.id, p.name, p.normalized_name, p.color, p.avatar, p.is_public, p.created_at, p.updated_at, u.email owner_email,
+    pool.query<ProfileDbRow>(`SELECT p.id,p.name,p.normalized_name,p.color,p.avatar,p.is_public,p.owner_user_id,p.created_at,p.updated_at,u.username owner_username,
       CASE WHEN p.owner_user_id = $1 THEN 'owner' ELSE pa.role END role
       FROM profiles p JOIN users u ON u.id = p.owner_user_id LEFT JOIN profile_access pa ON pa.profile_id = p.id AND pa.user_id = $1
       WHERE p.deleted_at IS NULL AND (p.owner_user_id = $1 OR pa.user_id = $1) ORDER BY p.updated_at DESC`, [userId]),
-    pool.query<GameDbRow>("SELECT id, mode_id, status, state, version, updated_at FROM games WHERE owner_user_id = $1 AND deleted_at IS NULL ORDER BY updated_at DESC", [userId]),
+    pool.query<GameDbRow>(`SELECT DISTINCT g.id,g.owner_user_id,g.mode_id,g.status,g.state,g.version,g.updated_at FROM games g
+      LEFT JOIN game_participants gp ON gp.game_id=g.id LEFT JOIN profiles p ON p.id=gp.profile_id LEFT JOIN profile_access pa ON pa.profile_id=p.id AND pa.user_id=$1
+      WHERE g.deleted_at IS NULL AND (g.owner_user_id=$1 OR p.owner_user_id=$1 OR pa.user_id=$1) ORDER BY g.updated_at DESC`, [userId]),
   ]);
   return { profiles: profileResult.rows.map(mapProfile), games: gameResult.rows.map(mapGame) };
 }
@@ -50,11 +52,19 @@ const syncRoutes: FastifyPluginAsync = async (app) => {
       }
       for (const game of parsed.data.games) {
         const state = remapIdentifiers(game.state, mappings);
-        await client.query(`INSERT INTO games(id, owner_user_id, mode_id, status, state, client_updated_at)
+        const saved = await client.query(`INSERT INTO games(id, owner_user_id, mode_id, status, state, client_updated_at)
           VALUES($1,$2,$3,$4,$5,$6)
           ON CONFLICT(id) DO UPDATE SET mode_id = EXCLUDED.mode_id, status = EXCLUDED.status, state = EXCLUDED.state,
             client_updated_at = EXCLUDED.client_updated_at, updated_at = now(), version = games.version + 1, deleted_at = NULL
           WHERE games.owner_user_id = $2 AND games.client_updated_at <= EXCLUDED.client_updated_at`, [game.id, userId, game.modeId, game.status, state, game.updatedAt]);
+        if (saved.rowCount) {
+          await client.query("DELETE FROM game_participants WHERE game_id=$1", [game.id]);
+          for (const participant of extractParticipants(state)) {
+            await client.query(`INSERT INTO game_participants(game_id,profile_id,player_name,darts_thrown,points_scored,best_turn,is_winner)
+              SELECT $1,$2,$3,$4,$5,$6,$7 WHERE EXISTS(SELECT 1 FROM profiles WHERE id=$2)
+              ON CONFLICT(game_id,profile_id) DO UPDATE SET player_name=EXCLUDED.player_name,darts_thrown=EXCLUDED.darts_thrown,points_scored=EXCLUDED.points_scored,best_turn=EXCLUDED.best_turn,is_winner=EXCLUDED.is_winner`, [game.id, participant.profileId, participant.name, participant.dartsThrown, participant.pointsScored, participant.bestTurn, participant.isWinner]);
+          }
+        }
       }
       if (parsed.data.deletedGameIds.length) await client.query("UPDATE games SET deleted_at = now(), updated_at = now(), version = version + 1 WHERE owner_user_id = $1 AND id = ANY($2::text[])", [userId, parsed.data.deletedGameIds]);
       await client.query("COMMIT");

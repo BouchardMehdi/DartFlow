@@ -17,4 +17,10 @@ describe("profils joueurs", () => {
     ]);
     expect(profiles.map((item) => item.id)).toEqual(["new", "other"]);
   });
+
+  it("conserve deux profils homonymes appartenant à des comptes différents", () => {
+    const first = { ...profile("one", "Joueur 1", "2026-01-01T00:00:00.000Z"), ownerUserId: "account-a" };
+    const second = { ...profile("two", "Joueur 1", "2026-01-02T00:00:00.000Z"), ownerUserId: "account-b" };
+    expect(deduplicatePlayerProfiles([first, second]).map((item) => item.id)).toEqual(["two", "one"]);
+  });
 });

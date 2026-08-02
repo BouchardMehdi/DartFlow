@@ -4,6 +4,7 @@ export interface FinalStanding {
   rank: number;
   playerId: string;
   name: string;
+  ownerUsername?: string;
   color?: string;
   score: number;
   dartsThrown: number;
@@ -28,7 +29,7 @@ export function getFinalStandings(game: GameState): FinalStanding[] {
     const turns = game.turns.filter((turn) => turn.playerId === player.id);
     const total = turns.reduce((sum, turn) => sum + turn.turnScore, 0);
     const dartsThrown = turns.reduce((sum, turn) => sum + turn.darts.length, 0);
-    const base = { rank: index + 1, playerId: player.id, name: player.name, score: scoreFor(player.id), dartsThrown, bestTurn: Math.max(0, ...turns.map((turn) => turn.turnScore)), averagePerTurn: turns.length === 0 ? 0 : total / turns.length, averagePerDart: dartsThrown === 0 ? 0 : total / dartsThrown, isWinner: player.id === game.winnerId };
+    const base = { rank: index + 1, playerId: player.id, name: player.name, ...(player.ownerUsername ? { ownerUsername: player.ownerUsername } : {}), score: scoreFor(player.id), dartsThrown, bestTurn: Math.max(0, ...turns.map((turn) => turn.turnScore)), averagePerTurn: turns.length === 0 ? 0 : total / turns.length, averagePerDart: dartsThrown === 0 ? 0 : total / dartsThrown, isWinner: player.id === game.winnerId };
     return player.color ? { ...base, color: player.color } : base;
   });
 }

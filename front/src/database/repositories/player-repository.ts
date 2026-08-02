@@ -7,9 +7,9 @@ export const normalizePlayerName = (name: string) => name.trim().replace(/\s+/g,
 export function deduplicatePlayerProfiles(players: SavedPlayer[]): SavedPlayer[] {
   const seen = new Set<string>();
   return [...players].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).filter((player) => {
-    const normalizedName = normalizePlayerName(player.name);
-    if (seen.has(normalizedName)) return false;
-    seen.add(normalizedName);
+    const identity = player.ownerUserId ? `${player.ownerUserId}:${normalizePlayerName(player.name)}` : `local:${normalizePlayerName(player.name)}`;
+    if (seen.has(identity)) return false;
+    seen.add(identity);
     return true;
   });
 }
@@ -19,13 +19,13 @@ export async function savePlayers(players: Player[]): Promise<void> {
   const now = new Date().toISOString();
   const saved = await database.players.toArray();
   const byId = new Map(saved.map((player) => [player.id, player]));
-  const byName = new Map(deduplicatePlayerProfiles(saved).map((player) => [normalizePlayerName(player.name), player]));
+  const byName = new Map(deduplicatePlayerProfiles(saved).filter((player) => !player.cloudRole || player.cloudRole === "owner").map((player) => [normalizePlayerName(player.name), player]));
   const records = new Map<string, SavedPlayer>();
   for (const player of players) {
     const name = player.name.trim().replace(/\s+/g, " ");
-    const existing = byName.get(normalizePlayerName(name)) ?? byId.get(player.id);
+    const existing = byId.get(player.id) ?? byName.get(normalizePlayerName(name));
     const base = { id: existing?.id ?? player.id, name: existing?.name ?? name, order: player.order, createdAt: existing?.createdAt ?? now, updatedAt: now };
-    const record: SavedPlayer = { ...base, ...(existing?.color || player.color ? { color: existing?.color ?? player.color } : {}), ...(existing?.avatar || player.avatar ? { avatar: existing?.avatar ?? player.avatar } : {}), ...(existing?.cloudUserId ? { cloudUserId: existing.cloudUserId } : {}), ...(existing?.cloudRole ? { cloudRole: existing.cloudRole } : {}), ...(existing?.ownerEmail ? { ownerEmail: existing.ownerEmail } : {}), ...(existing?.isPublic === undefined ? {} : { isPublic: existing.isPublic }) };
+    const record: SavedPlayer = { ...base, ...(existing?.color || player.color ? { color: existing?.color ?? player.color } : {}), ...(existing?.avatar || player.avatar ? { avatar: existing?.avatar ?? player.avatar } : {}), ...(existing?.cloudUserId ? { cloudUserId: existing.cloudUserId } : {}), ...(existing?.cloudRole ? { cloudRole: existing.cloudRole } : {}), ...(existing?.ownerUserId || player.ownerUserId ? { ownerUserId: existing?.ownerUserId ?? player.ownerUserId } : {}), ...(existing?.ownerUsername || player.ownerUsername ? { ownerUsername: existing?.ownerUsername ?? player.ownerUsername } : {}), ...(existing?.isPublic === undefined ? {} : { isPublic: existing.isPublic }) };
     records.set(record.id, record);
   }
   await database.players.bulkPut([...records.values()]);
@@ -34,5 +34,6 @@ export async function savePlayers(players: Player[]): Promise<void> {
 
 export async function loadPlayers(): Promise<SavedPlayer[]> {
   if (typeof indexedDB === "undefined") return [];
-  return deduplicatePlayerProfiles(await database.players.toArray());
+  const [players, metadata] = await Promise.all([database.players.toArray(), database.syncMetadata.get("main")]);
+  return deduplicatePlayerProfiles(players.filter((player) => !player.cloudUserId || player.cloudUserId === metadata?.activeUserId));
 }

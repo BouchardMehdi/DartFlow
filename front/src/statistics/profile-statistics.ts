@@ -42,7 +42,7 @@ export function buildProfileStatistics(profiles: SavedPlayer[], games: GameState
     const grouped = new Map<string, MutableStats>();
     for (const game of games.filter((item) => item.status === "completed")) {
       const exact = game.players.find((player) => player.id === profile.id);
-      const player = exact ?? game.players.find((item) => normalizePlayerName(item.name) === normalizePlayerName(profile.name));
+      const player = exact ?? (!profile.ownerUserId ? game.players.find((item) => normalizePlayerName(item.name) === normalizePlayerName(profile.name)) : undefined);
       if (!player) continue;
       const descriptor = mode(game); const stats = grouped.get(descriptor.key) ?? { ...descriptor, games: 0, wins: 0, dartsThrown: 0, turnsPlayed: 0, pointsScored: 0, bestTurn: 0 };
       const standing = getFinalStandings(game).find((item) => item.playerId === player.id);

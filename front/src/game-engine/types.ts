@@ -16,6 +16,8 @@ export interface Player {
   color?: string;
   avatar?: string;
   order: number;
+  ownerUserId?: string;
+  ownerUsername?: string;
 }
 
 export interface Turn {

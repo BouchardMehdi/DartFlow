@@ -1,10 +1,11 @@
 export interface AccountUser {
   id: string;
   email: string;
+  username: string;
   createdAt: string;
 }
 
-export type ProfileRole = "owner" | "editor" | "viewer";
+export type ProfileRole = "owner" | "manager" | "player";
 
 export interface CloudProfile {
   id: string;
@@ -14,7 +15,8 @@ export interface CloudProfile {
   avatar?: string;
   isPublic: boolean;
   role: ProfileRole;
-  ownerEmail: string;
+  ownerUserId: string;
+  ownerUsername: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -25,6 +27,7 @@ export interface CloudGame {
   status: string;
   state: unknown;
   version: number;
+  ownerUserId: string;
   updatedAt: string;
 }
 
@@ -59,14 +62,33 @@ export interface SyncResponse {
 
 export interface ProfileShare {
   userId: string;
-  email: string;
+  username: string;
   role: ProfileRole;
+}
+
+export interface FriendSummary {
+  userId: string;
+  username: string;
+  since: string;
+}
+
+export interface FriendRequest {
+  userId: string;
+  username: string;
+  direction: "incoming" | "outgoing";
+  createdAt: string;
+}
+
+export interface FriendsResponse {
+  friends: FriendSummary[];
+  requests: FriendRequest[];
 }
 
 export interface LeaderboardRow {
   rank: number;
   profileId: string;
   name: string;
+  ownerUsername: string;
   games: number;
   wins: number;
   winRate: number;

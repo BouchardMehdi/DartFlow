@@ -1,55 +1,65 @@
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
-import type { FastifyPluginAsync, FastifyReply } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { config } from "../config.js";
 import { pool } from "../database.js";
-import { normalizeEmail } from "../domain.js";
+import { normalizeEmail, normalizeUsername } from "../domain.js";
+import { clearSessionCookies, createSession, revokeSession, rotateSession } from "../session.js";
 
-const credentialsSchema = z.object({ email: z.email().max(254), password: z.string().min(8).max(128) });
-const cookieOptions = { path: "/", httpOnly: true, sameSite: "lax" as const, secure: config.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 30 };
-
-async function setSession(reply: FastifyReply, user: { id: string; email: string }) {
-  const token = await reply.jwtSign({ email: user.email }, { sign: { sub: user.id, expiresIn: "30d" } });
-  reply.setCookie("dartflow_session", token, cookieOptions);
-}
+const loginSchema = z.object({ email: z.email().max(254), password: z.string().min(8).max(128) });
+const registerSchema = loginSchema.extend({ username: z.string().trim().min(3).max(24).regex(/^[a-zA-Z0-9_]+$/) });
 
 const authRoutes: FastifyPluginAsync = async (app) => {
   app.post("/register", { config: { rateLimit: { max: 8, timeWindow: "1 minute" } } }, async (request, reply) => {
-    const parsed = credentialsSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ message: "Adresse email ou mot de passe invalide." });
-    const email = normalizeEmail(parsed.data.email);
-    const exists = await pool.query("SELECT 1 FROM users WHERE email = $1", [email]);
-    if (exists.rowCount) return reply.code(409).send({ message: "Un compte utilise déjà cette adresse email." });
-    const user = { id: randomUUID(), email };
+    const parsed = registerSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ message: "Utilise un pseudo de 3 à 24 caractères avec lettres, chiffres ou _." });
+    const email = normalizeEmail(parsed.data.email); const username = normalizeUsername(parsed.data.username);
+    const exists = await pool.query("SELECT 1 FROM users WHERE email=$1 OR lower(username)=$2", [email, username]);
+    if (exists.rowCount) return reply.code(409).send({ message: "Cette adresse email ou ce nom d’utilisateur est déjà utilisé." });
+    const user = { id: randomUUID(), email, username, createdAt: new Date().toISOString() };
     const passwordHash = await bcrypt.hash(parsed.data.password, 12);
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      await client.query("INSERT INTO users(id, email, password_hash) VALUES($1, $2, $3)", [user.id, user.email, passwordHash]);
-      await client.query("INSERT INTO profile_access(profile_id, user_id, role) SELECT profile_id, $1, role FROM share_invitations WHERE email = $2 ON CONFLICT DO NOTHING", [user.id, user.email]);
-      await client.query("DELETE FROM share_invitations WHERE email = $1", [user.email]);
+      await client.query("INSERT INTO users(id,email,username,password_hash,created_at) VALUES($1,$2,$3,$4,$5)", [user.id, user.email, user.username, passwordHash, user.createdAt]);
+      await client.query("INSERT INTO profile_access(profile_id,user_id,role) SELECT profile_id,$1,CASE WHEN role='editor' THEN 'manager' ELSE 'player' END FROM share_invitations WHERE email=$2 ON CONFLICT DO NOTHING", [user.id, user.email]);
+      await client.query("DELETE FROM share_invitations WHERE email=$1", [user.email]);
       await client.query("COMMIT");
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
-    await setSession(reply, user);
-    return reply.code(201).send({ user: { ...user, createdAt: new Date().toISOString() } });
+    return reply.code(201).send(await createSession(reply, user, request.headers["user-agent"]));
   });
 
   app.post("/login", { config: { rateLimit: { max: 12, timeWindow: "1 minute" } } }, async (request, reply) => {
-    const parsed = credentialsSchema.safeParse(request.body);
+    const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ message: "Adresse email ou mot de passe invalide." });
-    const result = await pool.query<{ id: string; email: string; password_hash: string; created_at: Date }>("SELECT id, email, password_hash, created_at FROM users WHERE email = $1", [normalizeEmail(parsed.data.email)]);
-    const user = result.rows[0];
-    if (!user || !await bcrypt.compare(parsed.data.password, user.password_hash)) return reply.code(401).send({ message: "Adresse email ou mot de passe incorrect." });
-    await setSession(reply, user);
-    return { user: { id: user.id, email: user.email, createdAt: user.created_at.toISOString() } };
+    const result = await pool.query<{ id: string; email: string; username: string; password_hash: string; created_at: Date }>("SELECT id,email,username,password_hash,created_at FROM users WHERE email=$1", [normalizeEmail(parsed.data.email)]);
+    const found = result.rows[0];
+    if (!found || !await bcrypt.compare(parsed.data.password, found.password_hash)) return reply.code(401).send({ message: "Adresse email ou mot de passe incorrect." });
+    const user = { id: found.id, email: found.email, username: found.username, createdAt: found.created_at.toISOString() };
+    return createSession(reply, user, request.headers["user-agent"]);
   });
 
-  app.post("/logout", async (_request, reply) => { reply.clearCookie("dartflow_session", { path: "/" }); return reply.code(204).send(); });
+  app.post("/refresh", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const session = await rotateSession(reply, request.cookies.dartflow_refresh, request.headers["user-agent"]);
+    if (!session) return reply.code(401).send({ message: "Session expirée." });
+    return session;
+  });
+
+  app.post("/logout", async (request, reply) => { await revokeSession(request.cookies.dartflow_refresh); clearSessionCookies(reply); return reply.code(204).send(); });
   app.get("/me", { preHandler: app.authenticate }, async (request, reply) => {
-    const result = await pool.query<{ id: string; email: string; created_at: Date }>("SELECT id, email, created_at FROM users WHERE id = $1", [request.user.sub]);
+    const result = await pool.query<{ id: string; email: string; username: string; created_at: Date }>("SELECT id,email,username,created_at FROM users WHERE id=$1", [request.user.sub]);
     const user = result.rows[0];
-    return user ? { user: { id: user.id, email: user.email, createdAt: user.created_at.toISOString() } } : reply.code(401).send({ message: "Session invalide." });
+    return user ? { user: { id: user.id, email: user.email, username: user.username, createdAt: user.created_at.toISOString() }, accessExpiresAt: request.user.exp ? new Date(request.user.exp * 1000).toISOString() : new Date(Date.now() + 60 * 60 * 1000).toISOString() } : reply.code(401).send({ message: "Session invalide." });
+  });
+  app.patch("/me", { preHandler: app.authenticate }, async (request, reply) => {
+    const parsed = z.object({ username: z.string().trim().min(3).max(24).regex(/^[a-zA-Z0-9_]+$/) }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ message: "Nom d’utilisateur invalide." });
+    const username = normalizeUsername(parsed.data.username);
+    const conflict = await pool.query("SELECT 1 FROM users WHERE lower(username)=$1 AND id<>$2", [username, request.user.sub]);
+    if (conflict.rowCount) return reply.code(409).send({ message: "Ce nom d’utilisateur est déjà utilisé." });
+    const result = await pool.query<{ id: string; email: string; username: string; created_at: Date }>("UPDATE users SET username=$1,updated_at=now() WHERE id=$2 RETURNING id,email,username,created_at", [username, request.user.sub]);
+    const user = result.rows[0];
+    return user ? { user: { id:user.id,email:user.email,username:user.username,createdAt:user.created_at.toISOString() } } : reply.code(404).send({ message: "Compte introuvable." });
   });
 };
 

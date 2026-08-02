@@ -8,6 +8,7 @@ import authRoutes from "./routes/auth.js";
 import leaderboardRoutes from "./routes/leaderboard.js";
 import profileRoutes from "./routes/profiles.js";
 import syncRoutes from "./routes/sync.js";
+import friendRoutes from "./routes/friends.js";
 
 export async function buildApp() {
   const app = Fastify({ logger: config.NODE_ENV !== "test", trustProxy: true, bodyLimit: 15_000_000 });
@@ -18,6 +19,7 @@ export async function buildApp() {
   await app.register(authRoutes, { prefix: "/auth" });
   await app.register(syncRoutes, { prefix: "/sync" });
   await app.register(profileRoutes, { prefix: "/profiles" });
+  await app.register(friendRoutes, { prefix: "/friends" });
   await app.register(leaderboardRoutes, { prefix: "/leaderboard" });
   app.get("/health", async () => ({ status: "ok" }));
   app.setErrorHandler((error, _request, reply) => {

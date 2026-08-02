@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ResumeGameCard } from "@/components/home/ResumeGameCard";
 import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 import { CloudStatusBadge } from "@/components/cloud/CloudStatusBadge";
+import { AuthMenuActions } from "@/components/home/AuthMenuActions";
 
 export default function Home() {
   return (
@@ -21,6 +22,7 @@ export default function Home() {
           <InstallAppButton />
         </div>
         <nav className="mt-3 flex flex-wrap gap-2"><Link href="/stats" className="rounded-xl border border-[var(--line)] px-4 py-2 text-sm font-bold text-[var(--muted)] hover:text-white">Statistiques</Link><Link href="/leaderboard" className="rounded-xl border border-[var(--line)] px-4 py-2 text-sm font-bold text-[var(--muted)] hover:text-white">Classement en ligne</Link><Link href="/account" className="rounded-xl border border-[var(--line)] px-4 py-2 text-sm font-bold text-[var(--muted)] hover:text-white">Compte et partage</Link></nav>
+        <AuthMenuActions />
         <ResumeGameCard />
       </section>
 

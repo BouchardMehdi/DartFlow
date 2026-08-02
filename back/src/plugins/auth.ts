@@ -12,7 +12,7 @@ declare module "fastify" {
 const authPlugin: FastifyPluginAsync = async (app) => {
   await app.register(jwt, {
     secret: config.JWT_SECRET,
-    cookie: { cookieName: "dartflow_session", signed: false },
+    cookie: { cookieName: "dartflow_access", signed: false },
   });
   app.decorate("authenticate", async (request: FastifyRequest) => {
     await request.jwtVerify({ onlyCookie: true });
