@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ResumeGameCard } from "@/components/home/ResumeGameCard";
+import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 
 export default function Home() {
   return (
@@ -16,6 +17,7 @@ export default function Home() {
         <div className="mt-9 flex flex-col gap-3 sm:flex-row">
           <Link href="/new-game" className="grid min-h-14 place-items-center rounded-2xl bg-[var(--lime)] px-7 font-black text-black transition-transform hover:scale-[1.02]">Nouvelle partie</Link>
           <Link href="/history" className="grid min-h-14 place-items-center rounded-2xl border border-[var(--line)] px-7 font-bold text-[var(--muted)] hover:text-white">Historique</Link>
+          <InstallAppButton />
         </div>
         <ResumeGameCard />
       </section>
