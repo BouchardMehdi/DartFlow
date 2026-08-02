@@ -6,6 +6,7 @@ import { createX01Game } from "@/src/game-engine/x01";
 import { createAroundTheClockGame } from "@/src/game-engine/around-the-clock";
 import { createShanghaiGame } from "@/src/game-engine/shanghai";
 import { createCricketGame } from "@/src/game-engine/cricket";
+import { createKillerGame } from "@/src/game-engine/killer";
 import type { AroundTheClockProgressionRule, DartThrow, GameHistory, Player, X01EntryRule, X01ExitRule } from "@/src/game-engine/types";
 import type { GameState } from "@/src/game-engine/types";
 import { saveGame } from "@/src/database/repositories/game-repository";
@@ -19,6 +20,7 @@ interface GameStore {
   startAroundTheClock: (players: Player[], progression: AroundTheClockProgressionRule, bullFinish: boolean, rounds: number | null) => void;
   startShanghai: (players: Player[], rounds: number, instantWin: boolean) => void;
   startCricket: (players: Player[], rounds: number | null) => void;
+  startKiller: (players: Player[], lives: number) => void;
   throwDart: (dart: DartThrow) => void;
   undo: () => void;
   abandon: () => void;
@@ -38,6 +40,7 @@ export const useGameStore = create<GameStore>((set) => ({
   startAroundTheClock: (players, progression, bullFinish, rounds) => set(() => { const history = createHistory(createAroundTheClockGame(players, progression, bullFinish, rounds)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
   startShanghai: (players, rounds, instantWin) => set(() => { const history = createHistory(createShanghaiGame(players, rounds, instantWin)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
   startCricket: (players, rounds) => set(() => { const history = createHistory(createCricketGame(players, rounds)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
+  startKiller: (players, lives) => set(() => { const history = createHistory(createKillerGame(players, lives)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
   throwDart: (dart) => set((store) => {
     const result = processThrow(store.history, dart);
     useAnimationStore.getState().enqueueEvents(result.events);

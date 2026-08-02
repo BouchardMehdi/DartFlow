@@ -1,0 +1,7 @@
+import type { KillerModeState, Player } from "@/src/game-engine/types";
+
+interface Props { state: KillerModeState; players: Player[]; activePlayerId: string | undefined; }
+
+export function KillerScoreboard({ state, players, activePlayerId }: Props) {
+  return <section className="grid grid-cols-2 gap-3" aria-label="État des joueurs Killer">{players.map((player) => { const status = state.players[player.id]; if (!status) return null; return <article key={player.id} className={`rounded-2xl border p-4 ${status.eliminated ? "border-[var(--line)] opacity-45" : player.id === activePlayerId ? "border-[var(--lime)] bg-[var(--lime)]/5" : "border-[var(--line)] bg-[var(--panel)]"}`}><div className="flex items-center justify-between gap-2"><strong className="truncate text-sm">{player.name}</strong><span className="grid size-8 shrink-0 place-items-center rounded-full bg-black/30 font-black text-[var(--lime)]">{status.number}</span></div><div className="mt-3 flex items-end justify-between"><span><span className="block text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">Vies</span><strong className="text-2xl">{"♥".repeat(status.lives)}<span className="text-[var(--line)]">{"♥".repeat(state.startingLives - status.lives)}</span></strong></span><span className="text-right text-xs font-black uppercase tracking-wide text-[var(--muted)]">{status.eliminated ? "Éliminé" : status.isKiller ? "Killer" : `${status.marks}/3 marques`}</span></div></article>; })}</section>;
+}

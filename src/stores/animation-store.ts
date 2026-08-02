@@ -14,6 +14,8 @@ const noticeFor = (event: GameEvent): AnimationNotice | null => {
     case "SCORE_100_PLUS": return { ...base, label: `${event.score}`, detail: "TON", priority: 4, duration: 1300 };
     case "SHANGHAI": return { ...base, label: "SHANGHAI !", detail: `Simple · Double · Triple ${event.target}`, priority: 9, duration: 1900 };
     case "CRICKET_CLOSED": return { ...base, label: "FERMÉ", detail: event.target === "bull" ? "Bull fermé" : `Secteur ${event.target} fermé`, priority: 4, duration: 1300 };
+    case "KILLER_ACHIEVED": return { ...base, label: "KILLER !", detail: "Vous pouvez attaquer", priority: 7, duration: 1700 };
+    case "PLAYER_ELIMINATED": return { ...base, label: "ÉLIMINÉ", detail: "Un joueur quitte la partie", priority: 8, duration: 1700 };
     case "BULL_HIT": return { ...base, label: event.dart.zone === "inner-bull" ? "DOUBLE BULL" : "BULL", detail: `${event.dart.score} points`, priority: 3 };
     case "TRIPLE_HIT": return { ...base, label: "TRIPLE", detail: `${event.dart.score} points`, priority: 2 };
     case "DOUBLE_HIT": return { ...base, label: "DOUBLE", detail: `${event.dart.score} points`, priority: 1 };
