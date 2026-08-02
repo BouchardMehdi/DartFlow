@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { countUpConfigSchema } from "@/src/database/schemas";
-import type { Player } from "@/src/game-engine/types";
+import { countUpConfigSchema, x01ConfigSchema } from "@/src/database/schemas";
+import type { Player, X01EntryRule, X01ExitRule } from "@/src/game-engine/types";
 import { useGameStore } from "@/src/stores/game-store";
 
 const COLORS = ["#c8f03d", "#ff6b35", "#57b8ff", "#f25f8b", "#b99cff", "#45d6a8", "#ffd166", "#f28f3b"];
@@ -23,10 +23,16 @@ function shuffled(players: Player[]): Player[] {
 export function NewGameForm() {
   const router = useRouter();
   const start = useGameStore((store) => store.start);
+  const startX01 = useGameStore((store) => store.startX01);
+  const [mode, setMode] = useState<"count-up" | "301" | "501" | "701">("count-up");
   const [players, setPlayers] = useState<Player[]>(() => [makePlayer(0), makePlayer(1)]);
-  const [rounds, setRounds] = useState(8);
+  const [rounds, setRounds] = useState<number | null>(8);
   const [randomOrder, setRandomOrder] = useState(false);
-  const validation = useMemo(() => countUpConfigSchema.safeParse({ players, rounds }), [players, rounds]);
+  const [entryRule, setEntryRule] = useState<X01EntryRule>("straight");
+  const [exitRule, setExitRule] = useState<X01ExitRule>("double");
+  const validation = useMemo(() => mode === "count-up"
+    ? countUpConfigSchema.safeParse({ players, rounds })
+    : x01ConfigSchema.safeParse({ players, startingScore: Number(mode), entryRule, exitRule, rounds }), [players, rounds, mode, entryRule, exitRule]);
 
   const setPlayerCount = (count: number) => {
     setPlayers((current) => count > current.length
@@ -38,7 +44,8 @@ export function NewGameForm() {
     event.preventDefault();
     if (!validation.success) return;
     const ordered = randomOrder ? shuffled(players) : players.map((player, order) => ({ ...player, order }));
-    start(ordered, rounds);
+    if (mode === "count-up") start(ordered, rounds ?? 8);
+    else startX01(ordered, Number(mode) as 301 | 501 | 701, entryRule, exitRule, rounds);
     router.push("/game");
   };
 
@@ -53,13 +60,14 @@ export function NewGameForm() {
         <div className="space-y-5">
           <section className="rounded-[1.6rem] border border-[var(--line)] bg-[var(--panel)] p-5">
             <span className="text-xs font-black uppercase tracking-[.18em] text-[var(--lime)]">01 · Mode de jeu</span>
-            <label className="mt-4 block"><span className="mb-2 block text-sm font-bold">Mode</span><select className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[#0d0f0e] px-4 font-bold" defaultValue="count-up"><option value="count-up">Count‑Up</option><option disabled>301 — bientôt</option><option disabled>501 — bientôt</option><option disabled>Around the Clock — bientôt</option></select></label>
-            <div className="mt-4 rounded-xl bg-black/20 p-4"><p className="font-bold">Le plus gros score gagne</p><p className="mt-1 text-sm leading-6 text-[var(--muted)]">Chaque joueur lance trois fléchettes par manche. Tous les points sont additionnés.</p></div>
+            <label className="mt-4 block"><span className="mb-2 block text-sm font-bold">Mode</span><select value={mode} onChange={(event) => { const nextMode = event.target.value as typeof mode; setMode(nextMode); if (nextMode === "count-up" && rounds === null) setRounds(8); }} className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[#0d0f0e] px-4 font-bold"><option value="count-up">Count‑Up</option><option value="301">301</option><option value="501">501</option><option value="701">701</option><option disabled>Around the Clock — bientôt</option></select></label>
+            <div className="mt-4 rounded-xl bg-black/20 p-4"><p className="font-bold">{mode === "count-up" ? "Le plus gros score gagne" : `Atteignez exactement zéro depuis ${mode}`}</p><p className="mt-1 text-sm leading-6 text-[var(--muted)]">{mode === "count-up" ? "Chaque joueur lance trois fléchettes par manche. Tous les points sont additionnés." : "Un dépassement ou une sortie invalide provoque un bust et annule le tour."}</p></div>
           </section>
 
           <section className="rounded-[1.6rem] border border-[var(--line)] bg-[var(--panel)] p-5">
             <span className="text-xs font-black uppercase tracking-[.18em] text-[var(--lime)]">02 · Règles</span>
-            <label className="mt-4 block"><span className="mb-2 block text-sm font-bold">Nombre de manches</span><select value={rounds} onChange={(event) => setRounds(Number(event.target.value))} className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[#0d0f0e] px-4 font-bold">{[5, 8, 10, 15, 20].map((value) => <option key={value} value={value}>{value} manches</option>)}</select></label>
+            <label className="mt-4 block"><span className="mb-2 block text-sm font-bold">Nombre de manches</span><select value={rounds ?? "infinite"} onChange={(event) => setRounds(event.target.value === "infinite" ? null : Number(event.target.value))} className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[#0d0f0e] px-4 font-bold">{[5, 8, 10, 15, 20].map((value) => <option key={value} value={value}>{value} manches</option>)}{mode !== "count-up" && <option value="infinite">Infini — jusqu’au checkout</option>}</select></label>
+            {mode !== "count-up" && <div className="mt-4 grid gap-4 sm:grid-cols-2"><label><span className="mb-2 block text-sm font-bold">Entrée</span><select value={entryRule} onChange={(event) => setEntryRule(event.target.value as X01EntryRule)} className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[#0d0f0e] px-3 font-bold"><option value="straight">Straight in</option><option value="double">Double in</option><option value="master">Master in</option></select></label><label><span className="mb-2 block text-sm font-bold">Sortie</span><select value={exitRule} onChange={(event) => setExitRule(event.target.value as X01ExitRule)} className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[#0d0f0e] px-3 font-bold"><option value="straight">Straight out</option><option value="double">Double out</option><option value="master">Master out</option></select></label></div>}
           </section>
         </div>
 

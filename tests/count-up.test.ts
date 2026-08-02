@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { abandonGame, applyThrow, createCountUpGame, createHistory, registerThrow, undoLastThrow } from "@/src/game-engine/count-up";
+import { abandonGame, createCountUpGame, createHistory, registerThrow, undoLastThrow } from "@/src/game-engine/count-up";
+import { applyThrow } from "@/src/game-engine/game-engine";
 import type { DartThrow, Player } from "@/src/game-engine/types";
 
 const dart = (score = 20): DartThrow => ({ id: crypto.randomUUID(), segment: 20, multiplier: 1, zone: "single-inner", score, thrownAt: new Date().toISOString() });
@@ -15,6 +16,8 @@ describe("Count-Up", () => {
   it("additionne trois fléchettes puis change de joueur", () => {
     let state = createCountUpGame(players(2));
     state = registerThrow(state, dart(20)).state; state = registerThrow(state, dart(40)).state; state = registerThrow(state, dart(60)).state;
+    expect(state.modeState.kind).toBe("count-up");
+    if (state.modeState.kind !== "count-up") throw new Error();
     expect(state.modeState.scores.p0).toBe(120); expect(state.currentPlayerIndex).toBe(1); expect(state.turns[0]?.isCompleted).toBe(true);
   });
   it("annule par restauration exacte de l’état précédent", () => {

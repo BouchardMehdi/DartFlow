@@ -37,16 +37,33 @@ export interface CountUpModeState {
   scores: Record<string, number>;
 }
 
+export type X01EntryRule = "straight" | "double" | "master";
+export type X01ExitRule = "straight" | "double" | "master";
+
+export interface X01PlayerState {
+  score: number;
+  hasEntered: boolean;
+}
+
+export interface X01ModeState {
+  kind: "x01";
+  startingScore: 301 | 501 | 701;
+  entryRule: X01EntryRule;
+  exitRule: X01ExitRule;
+  maxRounds: number | null;
+  players: Record<string, X01PlayerState>;
+}
+
 export interface GameState {
   id: string;
-  modeId: "count-up";
+  modeId: "count-up" | "x01";
   status: "setup" | "in-progress" | "paused" | "completed" | "cancelled";
   players: Player[];
   currentPlayerIndex: number;
   currentRound: number;
   currentTurn: Turn;
   turns: Turn[];
-  modeState: CountUpModeState;
+  modeState: CountUpModeState | X01ModeState;
   winnerId?: string;
   createdAt: string;
   updatedAt: string;
@@ -60,6 +77,8 @@ export type GameEvent =
   | { type: "BULL_HIT"; dart: DartThrow }
   | { type: "TURN_COMPLETED"; turn: Turn }
   | { type: "PLAYER_CHANGED"; playerId: string }
+  | { type: "BUST"; playerId: string }
+  | { type: "CHECKOUT"; playerId: string }
   | { type: "GAME_WON"; playerId: string };
 
 export interface EngineResult { state: GameState; events: GameEvent[]; }

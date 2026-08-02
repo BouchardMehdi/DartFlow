@@ -19,6 +19,7 @@ export function createCountUpGame(players: Player[], maxRounds = 8, now = new Da
 }
 
 export function registerThrow(state: GameState, dart: DartThrow, now = new Date()): EngineResult {
+  if (state.modeState.kind !== "count-up") throw new Error("État Count-Up attendu");
   if (state.status !== "in-progress" || state.currentTurn.darts.length >= 3) return { state, events: [] };
   const player = state.players[state.currentPlayerIndex];
   if (!player) throw new Error("Joueur actif introuvable");
@@ -51,7 +52,7 @@ export function registerThrow(state: GameState, dart: DartThrow, now = new Date(
 }
 
 export const createHistory = (state: GameState): GameHistory => ({ present: state, past: [] });
-export const applyThrow = (history: GameHistory, dart: DartThrow): GameHistory => ({ past: [...history.past, structuredClone(history.present)], present: registerThrow(history.present, dart).state });
+export const applyCountUpThrow = (history: GameHistory, dart: DartThrow): GameHistory => ({ past: [...history.past, structuredClone(history.present)], present: registerThrow(history.present, dart).state });
 export const undoLastThrow = (history: GameHistory): GameHistory => {
   const previous = history.past.at(-1);
   return previous ? { present: previous, past: history.past.slice(0, -1) } : history;
