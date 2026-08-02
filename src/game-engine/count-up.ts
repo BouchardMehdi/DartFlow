@@ -1,4 +1,5 @@
 import type { DartThrow, EngineResult, GameEvent, GameHistory, GameState, Player, Turn } from "./types";
+import { getTurnScoreEvent } from "./score-events";
 
 const makeTurn = (player: Player, round: number, score: number, now: string): Turn => ({
   id: crypto.randomUUID(), playerId: player.id, roundNumber: round, darts: [], scoreBeforeTurn: score,
@@ -35,6 +36,8 @@ export function registerThrow(state: GameState, dart: DartThrow, now = new Date(
   if (!completed) return { state: { ...state, currentTurn: turn, modeState: { ...state.modeState, scores }, updatedAt: now.toISOString() }, events };
 
   events.push({ type: "TURN_COMPLETED", turn });
+  const scoreEvent = getTurnScoreEvent(turn.turnScore);
+  if (scoreEvent) events.push(scoreEvent);
   const lastPlayer = state.currentPlayerIndex === state.players.length - 1;
   const gameFinished = lastPlayer && state.currentRound === state.modeState.maxRounds;
   if (gameFinished) {

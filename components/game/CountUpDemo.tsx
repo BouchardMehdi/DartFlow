@@ -3,13 +3,17 @@
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useCallback, useMemo, useState } from "react";
 import { Dartboard } from "@/components/dartboard/Dartboard";
+import { AnimationOverlay } from "@/components/animations/AnimationOverlay";
+import { suggestCheckouts } from "@/src/game-engine/checkouts/checkout-service";
 import { createDart } from "@/src/game-engine/score-calculator";
 import { useGameStore } from "@/src/stores/game-store";
 
 const dartLabel = (score: number) => score === 0 ? "MISS" : String(score);
 
 export function CountUpDemo() {
+  const [showCheckoutAlternatives, setShowCheckoutAlternatives] = useState(false);
   const router = useRouter();
   const { history, throwDart, undo, abandon } = useGameStore();
   const game = history.present;
@@ -17,7 +21,9 @@ export function CountUpDemo() {
   const active = game.players[game.currentPlayerIndex];
   const winner = game.players.find((player) => player.id === game.winnerId);
   const isCountUp = game.modeState.kind === "count-up";
-  const playerScore = (playerId: string) => game.modeState.kind === "count-up" ? game.modeState.scores[playerId] ?? 0 : game.modeState.players[playerId]?.score ?? 0;
+  const playerScore = useCallback((playerId: string) => modeState.kind === "count-up" ? modeState.scores[playerId] ?? 0 : modeState.players[playerId]?.score ?? 0, [modeState]);
+  const checkoutRoutes = useMemo(() => active && modeState.kind === "x01" ? suggestCheckouts(playerScore(active.id), 3 - game.currentTurn.darts.length, modeState.exitRule, modeState.entryRule, modeState.players[active.id]?.hasEntered ?? false) : [], [active, modeState, game.currentTurn.darts.length, playerScore]);
+  const checkout = checkoutRoutes[0];
   const confirmAbandon = () => {
     if (!window.confirm("Abandonner cette partie ? La progression en cours sera perdue.")) return;
     abandon();
@@ -42,6 +48,7 @@ export function CountUpDemo() {
             <div className="mt-5 grid grid-cols-3 gap-2" aria-label="Fléchettes du tour">
               {[0, 1, 2].map((index) => <div key={index} className="grid h-14 place-items-center rounded-xl border border-[var(--line)] bg-black/20 text-lg font-black text-[var(--muted)]">{game.currentTurn.darts[index] ? dartLabel(game.currentTurn.darts[index].score) : `D${index + 1}`}</div>)}
             </div>
+            {checkout && <button type="button" aria-expanded={showCheckoutAlternatives} onClick={() => setShowCheckoutAlternatives((visible) => !visible)} className="mt-3 w-full rounded-xl border border-[var(--lime)]/40 bg-[var(--lime)]/5 px-4 py-3 text-left"><span className="flex items-center justify-between"><span className="text-xs font-black uppercase tracking-[.14em] text-[var(--lime)]">Checkout conseillé</span><strong className="tracking-[.08em]">{checkout.darts.join(" · ")}</strong></span>{showCheckoutAlternatives && checkoutRoutes.length > 1 && <span className="mt-3 block border-t border-[var(--line)] pt-3"><span className="mb-2 block text-[10px] font-bold uppercase tracking-[.14em] text-[var(--muted)]">Alternatives</span>{checkoutRoutes.slice(1).map((route) => <span key={route.darts.join("-")} className="mr-2 inline-block rounded-lg bg-black/25 px-3 py-2 text-sm font-bold">{route.darts.join(" · ")}</span>)}</span>}</button>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -55,6 +62,7 @@ export function CountUpDemo() {
       </section>
 
       <p className="sr-only" aria-live="polite">{active ? `${active.name}, score ${playerScore(active.id)}` : ""}</p>
+      <AnimationOverlay />
       <AnimatePresence>{winner && <motion.div className="fixed inset-0 z-20 grid place-items-center bg-black/80 p-6 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><motion.div initial={{ y: 30, scale: .9 }} animate={{ y: 0, scale: 1 }} className="w-full max-w-sm rounded-[2rem] border border-[var(--lime)] bg-[var(--panel)] p-8 text-center"><p className="text-sm font-black uppercase tracking-[.2em] text-[var(--lime)]">Victoire</p><h2 className="mt-3 text-4xl font-black">{winner.name}</h2><p className="mt-2 text-[var(--muted)]">{isCountUp ? `${playerScore(winner.id)} points` : playerScore(winner.id) === 0 ? "Checkout réussi" : `${playerScore(winner.id)} points restants`}</p><div className="mt-6 grid grid-cols-2 gap-3"><Link href="/" className="grid min-h-12 place-items-center rounded-xl border border-[var(--line)] font-bold">Menu</Link><button className="min-h-12 rounded-xl bg-[var(--lime)] font-black text-black" onClick={() => { if (game.modeState.kind === "count-up") useGameStore.getState().start(game.players, game.modeState.maxRounds); else useGameStore.getState().startX01(game.players, game.modeState.startingScore, game.modeState.entryRule, game.modeState.exitRule, game.modeState.maxRounds); }}>Rejouer</button></div></motion.div></motion.div>}</AnimatePresence>
     </main>
   );

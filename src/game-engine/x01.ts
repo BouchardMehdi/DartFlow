@@ -1,4 +1,5 @@
 import type { DartThrow, EngineResult, GameEvent, GameState, Player, Turn, X01EntryRule, X01ExitRule } from "./types";
+import { getTurnScoreEvent } from "./score-events";
 
 const makeTurn = (player: Player, round: number, score: number, now: string): Turn => ({
   id: crypto.randomUUID(), playerId: player.id, roundNumber: round, darts: [], scoreBeforeTurn: score,
@@ -43,12 +44,14 @@ export function registerX01Throw(state: GameState, dart: DartThrow, now = new Da
   if (dart.zone === "triple") events.push({ type: "TRIPLE_HIT", dart });
   if (dart.zone === "outer-bull" || dart.zone === "inner-bull") events.push({ type: "BULL_HIT", dart });
   if (checkout) {
+    const scoreEvent = getTurnScoreEvent(turn.turnScore); if (scoreEvent) events.push(scoreEvent);
     events.push({ type: "CHECKOUT", playerId: player.id }, { type: "GAME_WON", playerId: player.id });
     return { state: { ...state, status: "completed", currentTurn: turn, turns: [...state.turns, turn], modeState: { ...state.modeState, players: modePlayers }, winnerId: player.id, updatedAt: now.toISOString(), completedAt: now.toISOString() }, events };
   }
   if (bust) events.push({ type: "BUST", playerId: player.id });
   if (!completed) return { state: { ...state, currentTurn: turn, modeState: { ...state.modeState, players: modePlayers }, updatedAt: now.toISOString() }, events };
   events.push({ type: "TURN_COMPLETED", turn });
+  const scoreEvent = getTurnScoreEvent(turn.turnScore); if (scoreEvent) events.push(scoreEvent);
   const last = state.currentPlayerIndex === state.players.length - 1; const nextIndex = last ? 0 : state.currentPlayerIndex + 1; const nextRound = last ? state.currentRound + 1 : state.currentRound;
   if (last && state.modeState.maxRounds !== null && state.currentRound === state.modeState.maxRounds) {
     const winner = [...state.players].sort((a, b) => (modePlayers[a.id]?.score ?? Infinity) - (modePlayers[b.id]?.score ?? Infinity) || a.order - b.order)[0];

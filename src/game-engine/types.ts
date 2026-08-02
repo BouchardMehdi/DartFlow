@@ -79,6 +79,9 @@ export type GameEvent =
   | { type: "PLAYER_CHANGED"; playerId: string }
   | { type: "BUST"; playerId: string }
   | { type: "CHECKOUT"; playerId: string }
+  | { type: "SCORE_100_PLUS"; score: number }
+  | { type: "SCORE_140_PLUS"; score: number }
+  | { type: "SCORE_180"; score: 180 }
   | { type: "GAME_WON"; playerId: string };
 
 export interface EngineResult { state: GameState; events: GameEvent[]; }
