@@ -71,16 +71,24 @@ export interface ShanghaiModeState {
   scores: Record<string, number>;
 }
 
+export type CricketTarget = 20 | 19 | 18 | 17 | 16 | 15 | "bull";
+export interface CricketPlayerState { score: number; marks: Record<CricketTarget, number>; }
+export interface CricketModeState {
+  kind: "cricket";
+  maxRounds: number | null;
+  players: Record<string, CricketPlayerState>;
+}
+
 export interface GameState {
   id: string;
-  modeId: "count-up" | "x01" | "around-the-clock" | "shanghai";
+  modeId: "count-up" | "x01" | "around-the-clock" | "shanghai" | "cricket";
   status: "setup" | "in-progress" | "paused" | "completed" | "cancelled";
   players: Player[];
   currentPlayerIndex: number;
   currentRound: number;
   currentTurn: Turn;
   turns: Turn[];
-  modeState: CountUpModeState | X01ModeState | AroundTheClockModeState | ShanghaiModeState;
+  modeState: CountUpModeState | X01ModeState | AroundTheClockModeState | ShanghaiModeState | CricketModeState;
   winnerId?: string;
   createdAt: string;
   updatedAt: string;
@@ -100,6 +108,7 @@ export type GameEvent =
   | { type: "SCORE_140_PLUS"; score: number }
   | { type: "SCORE_180"; score: 180 }
   | { type: "SHANGHAI"; playerId: string; target: number }
+  | { type: "CRICKET_CLOSED"; playerId: string; target: CricketTarget }
   | { type: "GAME_WON"; playerId: string };
 
 export interface EngineResult { state: GameState; events: GameEvent[]; }

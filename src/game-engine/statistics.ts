@@ -14,9 +14,10 @@ export interface FinalStanding {
 }
 
 export function getFinalStandings(game: GameState): FinalStanding[] {
-  const scoreFor = (playerId: string) => game.modeState.kind === "count-up" || game.modeState.kind === "shanghai" ? game.modeState.scores[playerId] ?? 0 : game.modeState.kind === "x01" ? game.modeState.players[playerId]?.score ?? game.modeState.startingScore : game.modeState.players[playerId]?.target ?? 1;
+  const scoreFor = (playerId: string) => game.modeState.kind === "count-up" || game.modeState.kind === "shanghai" ? game.modeState.scores[playerId] ?? 0 : game.modeState.kind === "x01" || game.modeState.kind === "cricket" ? game.modeState.players[playerId]?.score ?? 0 : game.modeState.players[playerId]?.target ?? 1;
   const sorted = [...game.players].sort((a, b) => {
-    const difference = game.modeState.kind === "x01" ? scoreFor(a.id) - scoreFor(b.id) : scoreFor(b.id) - scoreFor(a.id);
+    const cricketDifference = game.modeState.kind === "cricket" ? Object.values(game.modeState.players[b.id]?.marks ?? {}).filter((marks) => marks >= 3).length - Object.values(game.modeState.players[a.id]?.marks ?? {}).filter((marks) => marks >= 3).length : 0;
+    const difference = cricketDifference || (game.modeState.kind === "x01" ? scoreFor(a.id) - scoreFor(b.id) : scoreFor(b.id) - scoreFor(a.id));
     return difference || a.order - b.order;
   });
   return sorted.map((player, index) => {

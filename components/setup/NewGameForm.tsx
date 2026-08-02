@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { aroundTheClockConfigSchema, countUpConfigSchema, shanghaiConfigSchema, x01ConfigSchema } from "@/src/database/schemas";
+import { aroundTheClockConfigSchema, countUpConfigSchema, cricketConfigSchema, shanghaiConfigSchema, x01ConfigSchema } from "@/src/database/schemas";
 import type { AroundTheClockProgressionRule, Player, X01EntryRule, X01ExitRule } from "@/src/game-engine/types";
 import { useGameStore } from "@/src/stores/game-store";
 import { loadPlayers } from "@/src/database/repositories/player-repository";
@@ -28,7 +28,8 @@ export function NewGameForm() {
   const startX01 = useGameStore((store) => store.startX01);
   const startAroundTheClock = useGameStore((store) => store.startAroundTheClock);
   const startShanghai = useGameStore((store) => store.startShanghai);
-  const [mode, setMode] = useState<"count-up" | "301" | "501" | "701" | "around-the-clock" | "shanghai">("count-up");
+  const startCricket = useGameStore((store) => store.startCricket);
+  const [mode, setMode] = useState<"count-up" | "301" | "501" | "701" | "around-the-clock" | "shanghai" | "cricket">("count-up");
   const [players, setPlayers] = useState<Player[]>(() => [makePlayer(0), makePlayer(1)]);
   const [rounds, setRounds] = useState<number | null>(8);
   const [randomOrder, setRandomOrder] = useState(false);
@@ -39,7 +40,7 @@ export function NewGameForm() {
   const [instantShanghaiWin, setInstantShanghaiWin] = useState(true);
   const [savedPlayers, setSavedPlayers] = useState<SavedPlayer[]>([]);
   useEffect(() => { let active = true; void loadPlayers().then((profiles) => { if (active) setSavedPlayers(profiles); }).catch(() => undefined); return () => { active = false; }; }, []);
-  const validation = useMemo(() => mode === "count-up" ? countUpConfigSchema.safeParse({ players, rounds }) : mode === "around-the-clock" ? aroundTheClockConfigSchema.safeParse({ players, progressionRule, bullFinish, rounds }) : mode === "shanghai" ? shanghaiConfigSchema.safeParse({ players, rounds, instantShanghaiWin }) : x01ConfigSchema.safeParse({ players, startingScore: Number(mode), entryRule, exitRule, rounds }), [players, rounds, mode, entryRule, exitRule, progressionRule, bullFinish, instantShanghaiWin]);
+  const validation = useMemo(() => mode === "count-up" ? countUpConfigSchema.safeParse({ players, rounds }) : mode === "around-the-clock" ? aroundTheClockConfigSchema.safeParse({ players, progressionRule, bullFinish, rounds }) : mode === "shanghai" ? shanghaiConfigSchema.safeParse({ players, rounds, instantShanghaiWin }) : mode === "cricket" ? cricketConfigSchema.safeParse({ players, rounds }) : x01ConfigSchema.safeParse({ players, startingScore: Number(mode), entryRule, exitRule, rounds }), [players, rounds, mode, entryRule, exitRule, progressionRule, bullFinish, instantShanghaiWin]);
 
   const setPlayerCount = (count: number) => {
     setPlayers((current) => count > current.length
@@ -54,6 +55,7 @@ export function NewGameForm() {
     if (mode === "count-up") start(ordered, rounds ?? 8);
     else if (mode === "around-the-clock") startAroundTheClock(ordered, progressionRule, bullFinish, rounds);
     else if (mode === "shanghai") startShanghai(ordered, rounds ?? 7, instantShanghaiWin);
+    else if (mode === "cricket") startCricket(ordered, rounds);
     else startX01(ordered, Number(mode) as 301 | 501 | 701, entryRule, exitRule, rounds);
     router.push("/game");
   };
@@ -79,8 +81,8 @@ export function NewGameForm() {
         <div className="space-y-5">
           <section className="rounded-[1.6rem] border border-[var(--line)] bg-[var(--panel)] p-5">
             <span className="text-xs font-black uppercase tracking-[.18em] text-[var(--lime)]">01 · Mode de jeu</span>
-            <label className="mt-4 block"><span className="mb-2 block text-sm font-bold">Mode</span><select value={mode} onChange={(event) => { const nextMode = event.target.value as typeof mode; setMode(nextMode); if ((nextMode === "count-up" || nextMode === "shanghai") && rounds === null) setRounds(nextMode === "shanghai" ? 7 : 8); }} className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[#0d0f0e] px-4 font-bold"><option value="count-up">Count‑Up</option><option value="301">301</option><option value="501">501</option><option value="701">701</option><option value="around-the-clock">Around the Clock</option><option value="shanghai">Shanghai</option></select></label>
-            <div className="mt-4 rounded-xl bg-black/20 p-4"><p className="font-bold">{mode === "count-up" ? "Le plus gros score gagne" : mode === "around-the-clock" ? "Faites le tour de la cible" : mode === "shanghai" ? "Marquez sur le secteur de la manche" : `Atteignez exactement zéro depuis ${mode}`}</p><p className="mt-1 text-sm leading-6 text-[var(--muted)]">{mode === "count-up" ? "Chaque joueur lance trois fléchettes par manche. Tous les points sont additionnés." : mode === "around-the-clock" ? "Touchez les secteurs dans l’ordre, de 1 à 20, puis éventuellement le bull." : mode === "shanghai" ? "Réalisez un simple, un double et un triple du numéro actif pour faire Shanghai." : "Un dépassement ou une sortie invalide provoque un bust et annule le tour."}</p></div>
+            <label className="mt-4 block"><span className="mb-2 block text-sm font-bold">Mode</span><select value={mode} onChange={(event) => { const nextMode = event.target.value as typeof mode; setMode(nextMode); if ((nextMode === "count-up" || nextMode === "shanghai") && rounds === null) setRounds(nextMode === "shanghai" ? 7 : 8); }} className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[#0d0f0e] px-4 font-bold"><option value="count-up">Count‑Up</option><option value="301">301</option><option value="501">501</option><option value="701">701</option><option value="around-the-clock">Around the Clock</option><option value="shanghai">Shanghai</option><option value="cricket">Cricket standard</option></select></label>
+            <div className="mt-4 rounded-xl bg-black/20 p-4"><p className="font-bold">{mode === "count-up" ? "Le plus gros score gagne" : mode === "around-the-clock" ? "Faites le tour de la cible" : mode === "shanghai" ? "Marquez sur le secteur de la manche" : mode === "cricket" ? "Fermez 20 à 15 et le Bull" : `Atteignez exactement zéro depuis ${mode}`}</p><p className="mt-1 text-sm leading-6 text-[var(--muted)]">{mode === "count-up" ? "Chaque joueur lance trois fléchettes par manche. Tous les points sont additionnés." : mode === "around-the-clock" ? "Touchez les secteurs dans l’ordre, de 1 à 20, puis éventuellement le bull." : mode === "shanghai" ? "Réalisez un simple, un double et un triple du numéro actif pour faire Shanghai." : mode === "cricket" ? "Trois marques ferment un secteur. Les marques excédentaires rapportent des points tant qu’un adversaire reste ouvert." : "Un dépassement ou une sortie invalide provoque un bust et annule le tour."}</p></div>
           </section>
 
           <section className="rounded-[1.6rem] border border-[var(--line)] bg-[var(--panel)] p-5">
