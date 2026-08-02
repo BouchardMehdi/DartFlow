@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ResumeGameCard } from "@/components/home/ResumeGameCard";
 
 export default function Home() {
   return (
@@ -16,6 +17,7 @@ export default function Home() {
           <Link href="/new-game" className="grid min-h-14 place-items-center rounded-2xl bg-[var(--lime)] px-7 font-black text-black transition-transform hover:scale-[1.02]">Nouvelle partie</Link>
           <span className="grid min-h-14 place-items-center rounded-2xl border border-[var(--line)] px-7 font-bold text-[var(--muted)]">Historique — bientôt</span>
         </div>
+        <ResumeGameCard />
       </section>
 
       <footer className="border-t border-[var(--line)] pt-4 text-xs text-[var(--muted)]">Count‑Up disponible · Fonctionne entièrement sur cet appareil</footer>

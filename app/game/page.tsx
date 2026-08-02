@@ -1,5 +1,5 @@
-import { CountUpDemo } from "@/components/game/CountUpDemo";
+import { GameSession } from "@/components/game/GameSession";
 
 export default function GamePage() {
-  return <CountUpDemo />;
+  return <GameSession />;
 }

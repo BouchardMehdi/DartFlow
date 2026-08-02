@@ -4,6 +4,8 @@ import { processThrow } from "@/src/game-engine/game-engine";
 import { useAnimationStore } from "@/src/stores/animation-store";
 import { createX01Game } from "@/src/game-engine/x01";
 import type { DartThrow, GameHistory, Player, X01EntryRule, X01ExitRule } from "@/src/game-engine/types";
+import type { GameState } from "@/src/game-engine/types";
+import { saveGame } from "@/src/database/repositories/game-repository";
 
 interface GameStore {
   history: GameHistory;
@@ -13,6 +15,7 @@ interface GameStore {
   throwDart: (dart: DartThrow) => void;
   undo: () => void;
   abandon: () => void;
+  restore: (state: GameState) => void;
 }
 
 const demoPlayers: Player[] = [
@@ -23,16 +26,15 @@ const demoPlayers: Player[] = [
 export const useGameStore = create<GameStore>((set) => ({
   history: createHistory(createCountUpGame(demoPlayers, 8)),
   hasStarted: false,
-  start: (players, rounds) => set({ history: createHistory(createCountUpGame(players, rounds)), hasStarted: true }),
-  startX01: (players, score, entry, exit, rounds) => set({ history: createHistory(createX01Game(players, score, entry, exit, rounds)), hasStarted: true }),
+  start: (players, rounds) => set(() => { const history = createHistory(createCountUpGame(players, rounds)); void saveGame(history.present); return { history, hasStarted: true }; }),
+  startX01: (players, score, entry, exit, rounds) => set(() => { const history = createHistory(createX01Game(players, score, entry, exit, rounds)); void saveGame(history.present); return { history, hasStarted: true }; }),
   throwDart: (dart) => set((store) => {
     const result = processThrow(store.history, dart);
     useAnimationStore.getState().enqueueEvents(result.events);
+    void saveGame(result.history.present);
     return { history: result.history };
   }),
-  undo: () => set((store) => ({ history: undoLastThrow(store.history) })),
-  abandon: () => set((store) => ({
-    history: { ...store.history, present: abandonGame(store.history.present) },
-    hasStarted: false,
-  })),
+  undo: () => set((store) => { const history = undoLastThrow(store.history); void saveGame(history.present); return { history }; }),
+  abandon: () => set((store) => { const history = { ...store.history, present: abandonGame(store.history.present) }; void saveGame(history.present); return { history, hasStarted: false }; }),
+  restore: (state) => set({ history: createHistory(state), hasStarted: true }),
 }));
