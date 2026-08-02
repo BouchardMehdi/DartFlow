@@ -97,16 +97,31 @@ export interface KillerModeState {
   players: Record<string, KillerPlayerState>;
 }
 
+export type TrainingType = "doubles" | "triples" | "checkout" | "bobs-27" | "random-target";
+export interface TrainingTarget { segment: number | null; multiplier: 1 | 2 | 3; zone: DartZone; label: string; }
+export interface TrainingModeState {
+  kind: "training";
+  trainingType: TrainingType;
+  maxRounds: number;
+  target: TrainingTarget | null;
+  checkoutStart: number | null;
+  remaining: number | null;
+  score: number;
+  hits: number;
+  attempts: number;
+  successes: number;
+}
+
 export interface GameState {
   id: string;
-  modeId: "count-up" | "x01" | "around-the-clock" | "shanghai" | "cricket" | "killer";
+  modeId: "count-up" | "x01" | "around-the-clock" | "shanghai" | "cricket" | "killer" | "training";
   status: "setup" | "in-progress" | "paused" | "completed" | "cancelled";
   players: Player[];
   currentPlayerIndex: number;
   currentRound: number;
   currentTurn: Turn;
   turns: Turn[];
-  modeState: CountUpModeState | X01ModeState | AroundTheClockModeState | ShanghaiModeState | CricketModeState | KillerModeState;
+  modeState: CountUpModeState | X01ModeState | AroundTheClockModeState | ShanghaiModeState | CricketModeState | KillerModeState | TrainingModeState;
   winnerId?: string;
   createdAt: string;
   updatedAt: string;
@@ -131,6 +146,7 @@ export type GameEvent =
   | { type: "CRICKET_CLOSED"; playerId: string; target: CricketTarget }
   | { type: "KILLER_ACHIEVED"; playerId: string }
   | { type: "PLAYER_ELIMINATED"; playerId: string }
+  | { type: "TRAINING_TARGET_HIT"; playerId: string; target: string }
   | { type: "GAME_WON"; playerId: string };
 
 export interface EngineResult { state: GameState; events: GameEvent[]; }

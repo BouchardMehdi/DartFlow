@@ -64,6 +64,12 @@ function rulesFor(game: GameState): RuleContent {
       ],
     };
   }
+  if (state.kind === "training") {
+    if (state.trainingType === "doubles" || state.trainingType === "triples") { const zone = state.trainingType === "doubles" ? "double" : "triple"; return { title: `Entraînement aux ${zone}s`, introduction: `Travaillez successivement tous les ${zone}s, du ${zone === "double" ? "D" : "T"}1 au ${zone === "double" ? "D" : "T"}20.`, sections: [{ title: "Déroulement", items: [`Vous disposez de trois fléchettes sur chaque ${zone}.`, "Après trois lancers, la cible suivante est affichée automatiquement."] }, { title: "Résultat", items: ["Chaque impact exact rapporte une touche.", "La session se termine après le secteur 20, soit 60 fléchettes au maximum."] }] }; }
+    if (state.trainingType === "checkout") return { title: "Checkout Challenge", introduction: `Réussissez ${state.maxRounds} checkouts aléatoires en Double Out.`, sections: [{ title: "Déroulement", items: ["Un score réalisable entre 2 et 170 est proposé pour chaque défi.", "Vous disposez de trois fléchettes pour atteindre exactement zéro."] }, { title: "Bust et sortie", items: ["Un dépassement, un reste de 1 ou une sortie sans double provoque un bust et termine le défi.", "La dernière fléchette doit toucher un double ou le bull intérieur."] }, { title: "Résultat", items: ["Le score final correspond au nombre de checkouts réussis."] }] };
+    if (state.trainingType === "bobs-27") return { title: "Bob’s 27", introduction: "Partez de 27 points et testez tous les doubles de D1 à D20.", sections: [{ title: "Déroulement", items: ["Vous lancez trois fléchettes sur chaque double.", "Chaque double touché ajoute sa valeur : D5 ajoute 10 points par exemple."] }, { title: "Pénalité", items: ["Si les trois fléchettes manquent le double demandé, sa valeur est retirée du score.", "La session se termine après D20 ou dès que le score passe sous zéro."] }] };
+    return { title: "Cible aléatoire", introduction: `Touchez des cibles tirées au hasard pendant ${state.maxRounds} manches.`, sections: [{ title: "Déroulement", items: ["Une nouvelle cible apparaît après chaque fléchette.", "Les simples, doubles, triples, le bull extérieur et le bull intérieur peuvent être demandés."] }, { title: "Résultat", items: [`La session comporte ${state.maxRounds * 3} fléchettes.`, "Chaque impact exact rapporte une touche."] }] };
+  }
   return {
     title: "Killer",
     introduction: "Devenez Killer, attaquez les numéros adverses et restez le dernier joueur en vie.",

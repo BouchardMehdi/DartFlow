@@ -18,6 +18,7 @@ const noticeFor = (event: GameEvent): AnimationNotice | null => {
     case "CRICKET_CLOSED": return { ...base, label: "FERMÉ", detail: event.target === "bull" ? "Bull fermé" : `Secteur ${event.target} fermé`, priority: 4, duration: 1300 };
     case "KILLER_ACHIEVED": return { ...base, label: "KILLER !", detail: "Vous pouvez attaquer", priority: 7, duration: 1700 };
     case "PLAYER_ELIMINATED": return { ...base, label: "ÉLIMINÉ", detail: "Un joueur quitte la partie", priority: 8, duration: 1700 };
+    case "TRAINING_TARGET_HIT": return { ...base, label: "CIBLE !", detail: event.target, priority: 6, duration: 1200 };
     case "BULL_HIT": return { ...base, label: event.dart.zone === "inner-bull" ? "DOUBLE BULL" : "BULL", detail: `${event.dart.score} points`, priority: 3 };
     case "TRIPLE_HIT": return { ...base, label: "TRIPLE", detail: `${event.dart.score} points`, priority: 2 };
     case "DOUBLE_HIT": return { ...base, label: "DOUBLE", detail: `${event.dart.score} points`, priority: 1 };

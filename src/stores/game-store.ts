@@ -7,7 +7,8 @@ import { createAroundTheClockGame } from "@/src/game-engine/around-the-clock";
 import { createShanghaiGame } from "@/src/game-engine/shanghai";
 import { createCricketGame } from "@/src/game-engine/cricket";
 import { createKillerGame } from "@/src/game-engine/killer";
-import type { AroundTheClockProgressionRule, CricketVariant, DartThrow, GameHistory, Player, X01EntryRule, X01ExitRule } from "@/src/game-engine/types";
+import { createTrainingGame } from "@/src/game-engine/training";
+import type { AroundTheClockProgressionRule, CricketVariant, DartThrow, GameHistory, Player, TrainingType, X01EntryRule, X01ExitRule } from "@/src/game-engine/types";
 import type { GameState } from "@/src/game-engine/types";
 import { saveGame } from "@/src/database/repositories/game-repository";
 import { savePlayers } from "@/src/database/repositories/player-repository";
@@ -21,6 +22,7 @@ interface GameStore {
   startShanghai: (players: Player[], rounds: number, instantWin: boolean, startTarget?: number) => void;
   startCricket: (players: Player[], rounds: number | null, variant: CricketVariant) => void;
   startKiller: (players: Player[], lives: number, selfDamage?: boolean, marksToKiller?: number) => void;
+  startTraining: (players: Player[], trainingType: TrainingType, rounds?: number) => void;
   throwDart: (dart: DartThrow) => void;
   undo: () => void;
   abandon: () => void;
@@ -41,6 +43,7 @@ export const useGameStore = create<GameStore>((set) => ({
   startShanghai: (players, rounds, instantWin, startTarget = 1) => set(() => { const history = createHistory(createShanghaiGame(players, rounds, instantWin, startTarget)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
   startCricket: (players, rounds, variant) => set(() => { const history = createHistory(createCricketGame(players, rounds, variant)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
   startKiller: (players, lives, selfDamage = false, marksToKiller = 3) => set(() => { const history = createHistory(createKillerGame(players, lives, { selfDamage, marksToKiller })); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
+  startTraining: (players, trainingType, rounds = 10) => set(() => { const history = createHistory(createTrainingGame(players, trainingType, rounds)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
   throwDart: (dart) => set((store) => {
     const result = processThrow(store.history, dart);
     useAnimationStore.getState().enqueueEvents(result.events);
