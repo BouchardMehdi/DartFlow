@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
+import { useRouter } from "next/navigation";
 import { Dartboard } from "@/components/dartboard/Dartboard";
 import { createDart } from "@/src/game-engine/score-calculator";
 import { useGameStore } from "@/src/stores/game-store";
@@ -8,16 +9,25 @@ import { useGameStore } from "@/src/stores/game-store";
 const dartLabel = (score: number) => score === 0 ? "MISS" : String(score);
 
 export function CountUpDemo() {
-  const { history, throwDart, undo } = useGameStore();
+  const router = useRouter();
+  const { history, throwDart, undo, abandon } = useGameStore();
   const game = history.present;
   const active = game.players[game.currentPlayerIndex];
   const winner = game.players.find((player) => player.id === game.winnerId);
+  const confirmAbandon = () => {
+    if (!window.confirm("Abandonner cette partie ? La progression en cours sera perdue.")) return;
+    abandon();
+    router.push("/");
+  };
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-4 pb-10 pt-5 sm:px-7">
       <header className="mb-6 flex items-center justify-between border-b border-[var(--line)] pb-4">
         <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-full bg-[var(--lime)] text-xl font-black text-black">↗</span><div><p className="text-lg font-black tracking-[-.04em]">DARTFLOW</p><p className="text-[10px] uppercase tracking-[.24em] text-[var(--muted)]">Count‑Up local</p></div></div>
-        <span className="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-bold text-[var(--muted)]">Manche {Math.min(game.currentRound, game.modeState.maxRounds)} / {game.modeState.maxRounds}</span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-bold text-[var(--muted)]">Manche {Math.min(game.currentRound, game.modeState.maxRounds)} / {game.modeState.maxRounds}</span>
+          <button type="button" onClick={confirmAbandon} className="rounded-full border border-[#713b32] px-3 py-1 text-xs font-bold text-[#ff9b7a] transition-colors hover:bg-[#713b32]/30">Abandonner</button>
+        </div>
       </header>
 
       <section className="grid gap-5 lg:grid-cols-[minmax(19rem,1fr)_minmax(22rem,1.15fr)] lg:items-start">

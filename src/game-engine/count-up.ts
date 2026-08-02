@@ -56,3 +56,9 @@ export const undoLastThrow = (history: GameHistory): GameHistory => {
   const previous = history.past.at(-1);
   return previous ? { present: previous, past: history.past.slice(0, -1) } : history;
 };
+
+export const abandonGame = (state: GameState, now = new Date()): GameState => ({
+  ...state,
+  status: "cancelled",
+  updatedAt: now.toISOString(),
+});

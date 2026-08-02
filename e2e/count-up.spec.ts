@@ -1,2 +1,11 @@
 import { expect, test } from "@playwright/test";
-test("affiche la démo Count-Up sur mobile", async ({ page }) => { await page.goto("/"); await expect(page.getByRole("heading", { name: "Joueur 1" })).toBeVisible(); await expect(page.getByRole("group", { name: /cible/i })).toBeVisible(); });
+
+test("configure puis démarre un Count-Up sur mobile", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Nouvelle partie" }).click();
+  await page.getByLabel("Pseudo du joueur 1").fill("Alice");
+  await page.getByLabel("Ordre de passage aléatoire").check();
+  await page.getByRole("button", { name: /Démarrer la partie/ }).click();
+  await expect(page.getByRole("group", { name: /cible/i })).toBeVisible();
+  await expect(page.getByText("Alice", { exact: true })).toBeVisible();
+});

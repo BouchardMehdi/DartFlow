@@ -1,12 +1,14 @@
 import { create } from "zustand";
-import { applyThrow, createCountUpGame, createHistory, undoLastThrow } from "@/src/game-engine/count-up";
+import { abandonGame, applyThrow, createCountUpGame, createHistory, undoLastThrow } from "@/src/game-engine/count-up";
 import type { DartThrow, GameHistory, Player } from "@/src/game-engine/types";
 
 interface GameStore {
   history: GameHistory;
+  hasStarted: boolean;
   start: (players: Player[], rounds: number) => void;
   throwDart: (dart: DartThrow) => void;
   undo: () => void;
+  abandon: () => void;
 }
 
 const demoPlayers: Player[] = [
@@ -16,7 +18,12 @@ const demoPlayers: Player[] = [
 
 export const useGameStore = create<GameStore>((set) => ({
   history: createHistory(createCountUpGame(demoPlayers, 8)),
-  start: (players, rounds) => set({ history: createHistory(createCountUpGame(players, rounds)) }),
+  hasStarted: false,
+  start: (players, rounds) => set({ history: createHistory(createCountUpGame(players, rounds)), hasStarted: true }),
   throwDart: (dart) => set((store) => ({ history: applyThrow(store.history, dart) })),
   undo: () => set((store) => ({ history: undoLastThrow(store.history) })),
+  abandon: () => set((store) => ({
+    history: { ...store.history, present: abandonGame(store.history.present) },
+    hasStarted: false,
+  })),
 }));

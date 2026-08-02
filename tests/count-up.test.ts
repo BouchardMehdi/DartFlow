@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyThrow, createCountUpGame, createHistory, registerThrow, undoLastThrow } from "@/src/game-engine/count-up";
+import { abandonGame, applyThrow, createCountUpGame, createHistory, registerThrow, undoLastThrow } from "@/src/game-engine/count-up";
 import type { DartThrow, Player } from "@/src/game-engine/types";
 
 const dart = (score = 20): DartThrow => ({ id: crypto.randomUUID(), segment: 20, multiplier: 1, zone: "single-inner", score, thrownAt: new Date().toISOString() });
@@ -29,4 +29,8 @@ describe("Count-Up", () => {
     expect(state.status).toBe("completed"); expect(state.winnerId).toBe("p0");
   });
   it("refuse une taille de partie invalide", () => { expect(() => createCountUpGame(players(0))).toThrow(); expect(() => createCountUpGame(players(9))).toThrow(); });
+  it("permet d'abandonner une partie en cours", () => {
+    const state = abandonGame(createCountUpGame(players(2)));
+    expect(state.status).toBe("cancelled");
+  });
 });
