@@ -6,7 +6,8 @@ const players: Player[] = [{ id: "p1", name: "Alice", order: 0 }, { id: "p2", na
 const dart = (segment: number, multiplier: 1 | 2 | 3): DartThrow => ({ id: crypto.randomUUID(), segment, multiplier, score: segment * multiplier, zone: multiplier === 2 ? "double" : multiplier === 3 ? "triple" : "single-inner", thrownAt: new Date().toISOString() });
 const withScore = (state: GameState, score: number): GameState => {
   if (state.modeState.kind !== "x01") throw new Error();
-  return { ...state, currentTurn: { ...state.currentTurn, scoreBeforeTurn: score, scoreAfterTurn: score }, modeState: { ...state.modeState, players: { ...state.modeState.players, p1: { score, hasEntered: true } } } };
+  const playerState = state.modeState.players.p1; if (!playerState) throw new Error();
+  return { ...state, currentTurn: { ...state.currentTurn, scoreBeforeTurn: score, scoreAfterTurn: score }, modeState: { ...state.modeState, players: { ...state.modeState.players, p1: { ...playerState, score, hasEntered: true } } } };
 };
 
 describe("X01", () => {
@@ -44,5 +45,16 @@ describe("X01", () => {
     let state = createX01Game([players[0]!], 301, "straight", "double", null);
     for (let index = 0; index < 3; index += 1) state = registerX01Throw(state, dart(20, 1)).state;
     expect(state.status).toBe("in-progress"); expect(state.currentRound).toBe(2);
+  });
+  it("enchaîne les legs et les sets avant de terminer le match", () => {
+    let state = createX01Game([players[0]!], 301, "straight", "double", null, 2, 2);
+    state = registerX01Throw(withScore(state, 40), dart(20, 2)).state;
+    expect(state.status).toBe("in-progress"); expect(state.modeState.kind === "x01" && state.modeState.players.p1?.legsWon).toBe(1);
+    state = registerX01Throw(withScore(state, 40), dart(20, 2)).state;
+    expect(state.modeState.kind === "x01" && state.modeState.players.p1?.setsWon).toBe(1);
+    state = registerX01Throw(withScore(state, 40), dart(20, 2)).state;
+    state = registerX01Throw(withScore(state, 40), dart(20, 2)).state;
+    expect(state.status).toBe("completed"); expect(state.winnerId).toBe("p1");
+    expect(state.modeState.kind === "x01" && state.modeState.players.p1?.setsWon).toBe(2);
   });
 });

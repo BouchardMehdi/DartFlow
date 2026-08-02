@@ -34,4 +34,8 @@ describe("Shanghai", () => {
     expect(state.status).toBe("completed"); expect(state.winnerId).toBe("p1");
   });
   it("refuse plus de vingt manches", () => { expect(() => createShanghaiGame(players, 21, true)).toThrow(); });
+  it("permet de choisir le premier secteur", () => {
+    let state = createShanghaiGame(players, 7, false, 5); expect(state.currentRound).toBe(5);
+    state = registerShanghaiThrow(state, dart(5, 2)).state; expect(state.modeState.kind === "shanghai" && state.modeState.scores.p1).toBe(10);
+  });
 });

@@ -7,7 +7,7 @@ import { createAroundTheClockGame } from "@/src/game-engine/around-the-clock";
 import { createShanghaiGame } from "@/src/game-engine/shanghai";
 import { createCricketGame } from "@/src/game-engine/cricket";
 import { createKillerGame } from "@/src/game-engine/killer";
-import type { AroundTheClockProgressionRule, DartThrow, GameHistory, Player, X01EntryRule, X01ExitRule } from "@/src/game-engine/types";
+import type { AroundTheClockProgressionRule, CricketVariant, DartThrow, GameHistory, Player, X01EntryRule, X01ExitRule } from "@/src/game-engine/types";
 import type { GameState } from "@/src/game-engine/types";
 import { saveGame } from "@/src/database/repositories/game-repository";
 import { savePlayers } from "@/src/database/repositories/player-repository";
@@ -16,11 +16,11 @@ interface GameStore {
   history: GameHistory;
   hasStarted: boolean;
   start: (players: Player[], rounds: number) => void;
-  startX01: (players: Player[], score: 301 | 501 | 701, entry: X01EntryRule, exit: X01ExitRule, rounds: number | null) => void;
-  startAroundTheClock: (players: Player[], progression: AroundTheClockProgressionRule, bullFinish: boolean, rounds: number | null) => void;
-  startShanghai: (players: Player[], rounds: number, instantWin: boolean) => void;
-  startCricket: (players: Player[], rounds: number | null) => void;
-  startKiller: (players: Player[], lives: number) => void;
+  startX01: (players: Player[], score: 301 | 501 | 701, entry: X01EntryRule, exit: X01ExitRule, rounds: number | null, legsToWin?: number, setsToWin?: number) => void;
+  startAroundTheClock: (players: Player[], progression: AroundTheClockProgressionRule, bullFinish: boolean, rounds: number | null, direction?: "ascending" | "descending") => void;
+  startShanghai: (players: Player[], rounds: number, instantWin: boolean, startTarget?: number) => void;
+  startCricket: (players: Player[], rounds: number | null, variant: CricketVariant) => void;
+  startKiller: (players: Player[], lives: number, selfDamage?: boolean, marksToKiller?: number) => void;
   throwDart: (dart: DartThrow) => void;
   undo: () => void;
   abandon: () => void;
@@ -36,11 +36,11 @@ export const useGameStore = create<GameStore>((set) => ({
   history: createHistory(createCountUpGame(demoPlayers, 8)),
   hasStarted: false,
   start: (players, rounds) => set(() => { const history = createHistory(createCountUpGame(players, rounds)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
-  startX01: (players, score, entry, exit, rounds) => set(() => { const history = createHistory(createX01Game(players, score, entry, exit, rounds)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
-  startAroundTheClock: (players, progression, bullFinish, rounds) => set(() => { const history = createHistory(createAroundTheClockGame(players, progression, bullFinish, rounds)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
-  startShanghai: (players, rounds, instantWin) => set(() => { const history = createHistory(createShanghaiGame(players, rounds, instantWin)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
-  startCricket: (players, rounds) => set(() => { const history = createHistory(createCricketGame(players, rounds)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
-  startKiller: (players, lives) => set(() => { const history = createHistory(createKillerGame(players, lives)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
+  startX01: (players, score, entry, exit, rounds, legsToWin = 1, setsToWin = 1) => set(() => { const history = createHistory(createX01Game(players, score, entry, exit, rounds, legsToWin, setsToWin)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
+  startAroundTheClock: (players, progression, bullFinish, rounds, direction = "ascending") => set(() => { const history = createHistory(createAroundTheClockGame(players, progression, bullFinish, rounds, direction)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
+  startShanghai: (players, rounds, instantWin, startTarget = 1) => set(() => { const history = createHistory(createShanghaiGame(players, rounds, instantWin, startTarget)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
+  startCricket: (players, rounds, variant) => set(() => { const history = createHistory(createCricketGame(players, rounds, variant)); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
+  startKiller: (players, lives, selfDamage = false, marksToKiller = 3) => set(() => { const history = createHistory(createKillerGame(players, lives, { selfDamage, marksToKiller })); void savePlayers(players); void saveGame(history.present); return { history, hasStarted: true }; }),
   throwDart: (dart) => set((store) => {
     const result = processThrow(store.history, dart);
     useAnimationStore.getState().enqueueEvents(result.events);

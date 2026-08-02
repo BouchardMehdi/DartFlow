@@ -9,6 +9,8 @@ const noticeFor = (event: GameEvent): AnimationNotice | null => {
   switch (event.type) {
     case "BUST": return { ...base, label: "BUST", detail: "Score du tour annulé", priority: 6, duration: 1500 };
     case "CHECKOUT": return { ...base, label: "CHECKOUT", detail: "Sortie réussie", priority: 9, duration: 1800 };
+    case "LEG_WON": return { ...base, label: "LEG !", detail: "Leg remporté", priority: 8, duration: 1600 };
+    case "SET_WON": return { ...base, label: "SET !", detail: "Set remporté", priority: 9, duration: 1800 };
     case "SCORE_180": return { ...base, label: "180 !", detail: "ONE HUNDRED AND EIGHTY", priority: 8, duration: 1800 };
     case "SCORE_140_PLUS": return { ...base, label: `${event.score}`, detail: "TON 40+", priority: 5, duration: 1400 };
     case "SCORE_100_PLUS": return { ...base, label: `${event.score}`, detail: "TON", priority: 4, duration: 1300 };

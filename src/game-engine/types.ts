@@ -43,6 +43,8 @@ export type X01ExitRule = "straight" | "double" | "master";
 export interface X01PlayerState {
   score: number;
   hasEntered: boolean;
+  legsWon: number;
+  setsWon: number;
 }
 
 export interface X01ModeState {
@@ -51,14 +53,18 @@ export interface X01ModeState {
   entryRule: X01EntryRule;
   exitRule: X01ExitRule;
   maxRounds: number | null;
+  legsToWin: number;
+  setsToWin: number;
+  legStarterIndex: number;
   players: Record<string, X01PlayerState>;
 }
 
-export type AroundTheClockProgressionRule = "single-only" | "multiplier";
+export type AroundTheClockProgressionRule = "single-only" | "any-hit" | "multiplier";
 export interface AroundTheClockPlayerState { target: number; completed: boolean; }
 export interface AroundTheClockModeState {
   kind: "around-the-clock";
   progressionRule: AroundTheClockProgressionRule;
+  direction: "ascending" | "descending";
   bullFinish: boolean;
   maxRounds: number | null;
   players: Record<string, AroundTheClockPlayerState>;
@@ -66,15 +72,18 @@ export interface AroundTheClockModeState {
 
 export interface ShanghaiModeState {
   kind: "shanghai";
+  startTarget: number;
   maxRounds: number;
   instantShanghaiWin: boolean;
   scores: Record<string, number>;
 }
 
 export type CricketTarget = 20 | 19 | 18 | 17 | 16 | 15 | "bull";
+export type CricketVariant = "standard" | "no-score" | "cut-throat";
 export interface CricketPlayerState { score: number; marks: Record<CricketTarget, number>; }
 export interface CricketModeState {
   kind: "cricket";
+  variant: CricketVariant;
   maxRounds: number | null;
   players: Record<string, CricketPlayerState>;
 }
@@ -83,7 +92,8 @@ export interface KillerPlayerState { number: number; marks: number; isKiller: bo
 export interface KillerModeState {
   kind: "killer";
   startingLives: number;
-  marksToKiller: 3;
+  marksToKiller: number;
+  selfDamage: boolean;
   players: Record<string, KillerPlayerState>;
 }
 
@@ -112,6 +122,8 @@ export type GameEvent =
   | { type: "PLAYER_CHANGED"; playerId: string }
   | { type: "BUST"; playerId: string }
   | { type: "CHECKOUT"; playerId: string }
+  | { type: "LEG_WON"; playerId: string }
+  | { type: "SET_WON"; playerId: string }
   | { type: "SCORE_100_PLUS"; score: number }
   | { type: "SCORE_140_PLUS"; score: number }
   | { type: "SCORE_180"; score: 180 }

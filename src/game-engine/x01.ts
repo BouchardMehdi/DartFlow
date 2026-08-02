@@ -1,4 +1,4 @@
-import type { DartThrow, EngineResult, GameEvent, GameState, Player, Turn, X01EntryRule, X01ExitRule } from "./types";
+import type { DartThrow, EngineResult, GameEvent, GameState, Player, Turn, X01EntryRule, X01ExitRule, X01PlayerState } from "./types";
 import { getTurnScoreEvent } from "./score-events";
 
 const makeTurn = (player: Player, round: number, score: number, now: string): Turn => ({
@@ -10,15 +10,36 @@ const qualifies = (dart: DartThrow, rule: X01EntryRule | X01ExitRule) =>
   rule === "straight" || (rule === "double" && (dart.multiplier === 2 || dart.zone === "inner-bull")) ||
   (rule === "master" && (dart.multiplier === 2 || dart.multiplier === 3 || dart.zone === "inner-bull"));
 
-export function createX01Game(players: Player[], startingScore: 301 | 501 | 701, entryRule: X01EntryRule, exitRule: X01ExitRule, maxRounds: number | null = 20, now = new Date()): GameState {
+export function createX01Game(players: Player[], startingScore: 301 | 501 | 701, entryRule: X01EntryRule, exitRule: X01ExitRule, maxRounds: number | null = 20, legsToWin = 1, setsToWin = 1, now = new Date()): GameState {
   if (players.length < 1 || players.length > 8) throw new Error("Une partie requiert de 1 à 8 joueurs");
   if (maxRounds !== null && (!Number.isInteger(maxRounds) || maxRounds < 1)) throw new Error("Nombre de manches invalide");
+  if (!Number.isInteger(legsToWin) || legsToWin < 1 || legsToWin > 9) throw new Error("Nombre de legs invalide");
+  if (!Number.isInteger(setsToWin) || setsToWin < 1 || setsToWin > 5) throw new Error("Nombre de sets invalide");
   const ordered = [...players].sort((a, b) => a.order - b.order); const first = ordered[0];
   if (!first) throw new Error("Joueur manquant");
   const date = now.toISOString();
   return { id: crypto.randomUUID(), modeId: "x01", status: "in-progress", players: ordered, currentPlayerIndex: 0, currentRound: 1,
-    currentTurn: makeTurn(first, 1, startingScore, date), turns: [], modeState: { kind: "x01", startingScore, entryRule, exitRule, maxRounds,
-      players: Object.fromEntries(ordered.map((player) => [player.id, { score: startingScore, hasEntered: entryRule === "straight" }])) }, createdAt: date, updatedAt: date };
+    currentTurn: makeTurn(first, 1, startingScore, date), turns: [], modeState: { kind: "x01", startingScore, entryRule, exitRule, maxRounds, legsToWin, setsToWin, legStarterIndex: 0,
+      players: Object.fromEntries(ordered.map((player) => [player.id, { score: startingScore, hasEntered: entryRule === "straight", legsWon: 0, setsWon: 0 }])) }, createdAt: date, updatedAt: date };
+}
+
+function completeLeg(state: GameState, turn: Turn, modePlayers: Record<string, X01PlayerState>, winnerId: string, events: GameEvent[], now: Date): EngineResult {
+  if (state.modeState.kind !== "x01") throw new Error("État X01 attendu");
+  const winnerState = modePlayers[winnerId]; if (!winnerState) throw new Error("État du gagnant introuvable");
+  const wonSet = winnerState.legsWon + 1 >= state.modeState.legsToWin;
+  const nextSetCount = winnerState.setsWon + (wonSet ? 1 : 0);
+  let progressedPlayers = { ...modePlayers, [winnerId]: { ...winnerState, legsWon: wonSet ? 0 : winnerState.legsWon + 1, setsWon: nextSetCount } };
+  if (wonSet) progressedPlayers = Object.fromEntries(Object.entries(progressedPlayers).map(([id, playerState]) => [id, { ...playerState, legsWon: 0 }]));
+  events.push({ type: "LEG_WON", playerId: winnerId });
+  if (wonSet) events.push({ type: "SET_WON", playerId: winnerId });
+  if (nextSetCount >= state.modeState.setsToWin) {
+    events.push({ type: "GAME_WON", playerId: winnerId });
+    return { state: { ...state, status: "completed", currentTurn: turn, turns: [...state.turns, turn], modeState: { ...state.modeState, players: progressedPlayers }, winnerId, updatedAt: now.toISOString(), completedAt: now.toISOString() }, events };
+  }
+  const resetPlayers = Object.fromEntries(Object.entries(progressedPlayers).map(([id, playerState]) => [id, { ...playerState, score: state.modeState.kind === "x01" ? state.modeState.startingScore : 301, hasEntered: state.modeState.kind === "x01" && state.modeState.entryRule === "straight" }])) as Record<string, X01PlayerState>;
+  const starterIndex = (state.modeState.legStarterIndex + 1) % state.players.length; const starter = state.players[starterIndex]; if (!starter) throw new Error("Joueur de départ introuvable");
+  events.push({ type: "PLAYER_CHANGED", playerId: starter.id });
+  return { state: { ...state, currentPlayerIndex: starterIndex, currentRound: 1, currentTurn: makeTurn(starter, 1, state.modeState.startingScore, now.toISOString()), turns: [...state.turns, turn], modeState: { ...state.modeState, legStarterIndex: starterIndex, players: resetPlayers }, updatedAt: now.toISOString() }, events };
 }
 
 export function registerX01Throw(state: GameState, dart: DartThrow, now = new Date()): EngineResult {
@@ -37,7 +58,7 @@ export function registerX01Throw(state: GameState, dart: DartThrow, now = new Da
   const completed = darts.length === 3 || bust || checkout;
   const scoreAfterTurn = bust ? state.currentTurn.scoreBeforeTurn : remaining;
   const turn: Turn = { ...state.currentTurn, darts, turnScore: bust ? 0 : state.currentTurn.scoreBeforeTurn - scoreAfterTurn, scoreAfterTurn, isBust: bust, isCompleted: completed };
-  const nextPlayerState = { score: scoreAfterTurn, hasEntered: bust ? playerState.hasEntered : entered };
+  const nextPlayerState = { ...playerState, score: scoreAfterTurn, hasEntered: bust ? playerState.hasEntered : entered };
   const modePlayers = { ...state.modeState.players, [player.id]: nextPlayerState };
   const events: GameEvent[] = [{ type: "DART_REGISTERED", dart }];
   if (dart.zone === "double") events.push({ type: "DOUBLE_HIT", dart });
@@ -45,8 +66,8 @@ export function registerX01Throw(state: GameState, dart: DartThrow, now = new Da
   if (dart.zone === "outer-bull" || dart.zone === "inner-bull") events.push({ type: "BULL_HIT", dart });
   if (checkout) {
     const scoreEvent = getTurnScoreEvent(turn.turnScore); if (scoreEvent) events.push(scoreEvent);
-    events.push({ type: "CHECKOUT", playerId: player.id }, { type: "GAME_WON", playerId: player.id });
-    return { state: { ...state, status: "completed", currentTurn: turn, turns: [...state.turns, turn], modeState: { ...state.modeState, players: modePlayers }, winnerId: player.id, updatedAt: now.toISOString(), completedAt: now.toISOString() }, events };
+    events.push({ type: "CHECKOUT", playerId: player.id }, { type: "TURN_COMPLETED", turn });
+    return completeLeg(state, turn, modePlayers, player.id, events, now);
   }
   if (bust) events.push({ type: "BUST", playerId: player.id });
   if (!completed) return { state: { ...state, currentTurn: turn, modeState: { ...state.modeState, players: modePlayers }, updatedAt: now.toISOString() }, events };
@@ -54,10 +75,9 @@ export function registerX01Throw(state: GameState, dart: DartThrow, now = new Da
   const scoreEvent = getTurnScoreEvent(turn.turnScore); if (scoreEvent) events.push(scoreEvent);
   const last = state.currentPlayerIndex === state.players.length - 1; const nextIndex = last ? 0 : state.currentPlayerIndex + 1; const nextRound = last ? state.currentRound + 1 : state.currentRound;
   if (last && state.modeState.maxRounds !== null && state.currentRound === state.modeState.maxRounds) {
-    const winner = [...state.players].sort((a, b) => (modePlayers[a.id]?.score ?? Infinity) - (modePlayers[b.id]?.score ?? Infinity) || a.order - b.order)[0];
-    if (!winner) throw new Error("Gagnant introuvable");
-    events.push({ type: "GAME_WON", playerId: winner.id });
-    return { state: { ...state, status: "completed", currentTurn: turn, turns: [...state.turns, turn], modeState: { ...state.modeState, players: modePlayers }, winnerId: winner.id, updatedAt: now.toISOString(), completedAt: now.toISOString() }, events };
+    const legWinner = [...state.players].sort((a, b) => (modePlayers[a.id]?.score ?? Infinity) - (modePlayers[b.id]?.score ?? Infinity) || a.order - b.order)[0];
+    if (!legWinner) throw new Error("Gagnant introuvable");
+    return completeLeg(state, turn, modePlayers, legWinner.id, events, now);
   }
   const next = state.players[nextIndex]; if (!next) throw new Error("Joueur suivant introuvable");
   const nextScore = modePlayers[next.id]?.score; if (nextScore === undefined) throw new Error("Score suivant introuvable");

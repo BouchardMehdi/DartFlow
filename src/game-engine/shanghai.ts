@@ -3,11 +3,12 @@ import type { DartThrow, EngineResult, GameEvent, GameState, Player, Turn } from
 
 const makeTurn = (player: Player, round: number, score: number, now: string): Turn => ({ id: crypto.randomUUID(), playerId: player.id, roundNumber: round, darts: [], scoreBeforeTurn: score, scoreAfterTurn: score, turnScore: 0, isBust: false, isCompleted: false, createdAt: now });
 
-export function createShanghaiGame(players: Player[], maxRounds: number, instantShanghaiWin: boolean, now = new Date()): GameState {
+export function createShanghaiGame(players: Player[], maxRounds: number, instantShanghaiWin: boolean, startTarget = 1, now = new Date()): GameState {
   if (players.length < 1 || players.length > 8) throw new Error("Une partie requiert de 1 à 8 joueurs");
   if (!Number.isInteger(maxRounds) || maxRounds < 1 || maxRounds > 20) throw new Error("Le nombre de manches doit être compris entre 1 et 20");
+  if (!Number.isInteger(startTarget) || startTarget < 1 || startTarget > maxRounds) throw new Error("Le secteur de départ est invalide");
   const ordered = [...players].sort((a, b) => a.order - b.order); const first = ordered[0]; if (!first) throw new Error("Joueur manquant"); const date = now.toISOString();
-  return { id: crypto.randomUUID(), modeId: "shanghai", status: "in-progress", players: ordered, currentPlayerIndex: 0, currentRound: 1, currentTurn: makeTurn(first, 1, 0, date), turns: [], modeState: { kind: "shanghai", maxRounds, instantShanghaiWin, scores: Object.fromEntries(ordered.map((player) => [player.id, 0])) }, createdAt: date, updatedAt: date };
+  return { id: crypto.randomUUID(), modeId: "shanghai", status: "in-progress", players: ordered, currentPlayerIndex: 0, currentRound: startTarget, currentTurn: makeTurn(first, startTarget, 0, date), turns: [], modeState: { kind: "shanghai", startTarget, maxRounds, instantShanghaiWin, scores: Object.fromEntries(ordered.map((player) => [player.id, 0])) }, createdAt: date, updatedAt: date };
 }
 
 export function registerShanghaiThrow(state: GameState, dart: DartThrow, now = new Date()): EngineResult {

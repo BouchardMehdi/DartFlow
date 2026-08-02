@@ -18,6 +18,14 @@ describe("Around the Clock", () => {
     state = registerAroundTheClockThrow(state, dart(1, 2)).state; expect(target(state)).toBe(3);
     state = registerAroundTheClockThrow(state, dart(3, 3)).state; expect(target(state)).toBe(6);
   });
+  it("accepte tout multiplicateur mais avance d'un seul secteur", () => {
+    let state = createAroundTheClockGame(players(), "any-hit", false, null);
+    state = registerAroundTheClockThrow(state, dart(1, 3)).state; expect(target(state)).toBe(2);
+  });
+  it("peut progresser du secteur 20 vers le secteur 1", () => {
+    let state = createAroundTheClockGame(players(), "multiplier", false, null, "descending");
+    expect(target(state)).toBe(20); state = registerAroundTheClockThrow(state, dart(20, 3)).state; expect(target(state)).toBe(17);
+  });
   it("change de joueur après trois fléchettes", () => {
     let state = createAroundTheClockGame(players(), "multiplier", false, null);
     for (let index = 0; index < 3; index += 1) state = registerAroundTheClockThrow(state, dart(20)).state;

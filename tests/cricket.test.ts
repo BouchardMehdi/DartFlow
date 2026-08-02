@@ -38,3 +38,29 @@ describe("Cricket standard", () => {
     expect(state.status).toBe("completed"); expect(state.winnerId).toBe("p1");
   });
 });
+
+describe("Variantes du Cricket", () => {
+  it("ne compte jamais de points en Cricket sans points", () => {
+    let state = setMarks(createCricketGame(players, null, "no-score"), "p1", 20, 2);
+    state = registerCricketThrow(state, dart(20, 3)).state;
+    expect(state.modeState.kind === "cricket" && state.modeState.players.p1?.score).toBe(0);
+  });
+  it("fait gagner dès que toutes les cibles sont fermées en Cricket sans points", () => {
+    let state = createCricketGame(players, null, "no-score");
+    for (const target of [20, 19, 18, 17, 16, 15, "bull"] as CricketTarget[]) state = setMarks(state, "p1", target, target === 20 ? 2 : 3);
+    state = registerCricketThrow(state, dart(20, 1)).state;
+    expect(state.status).toBe("completed"); expect(state.winnerId).toBe("p1");
+  });
+  it("donne les points aux adversaires encore ouverts en Cut-Throat", () => {
+    let state = setMarks(createCricketGame(players, null, "cut-throat"), "p1", 20, 2);
+    state = registerCricketThrow(state, dart(20, 3)).state;
+    expect(state.modeState.kind === "cricket" && state.modeState.players.p1?.score).toBe(0);
+    expect(state.modeState.kind === "cricket" && state.modeState.players.p2?.score).toBe(40);
+  });
+  it("fait gagner le joueur ayant tout fermé avec le plus petit score en Cut-Throat", () => {
+    let state = createCricketGame(players, null, "cut-throat");
+    for (const target of [20, 19, 18, 17, 16, 15, "bull"] as CricketTarget[]) state = setMarks(state, "p1", target, target === 20 ? 2 : 3, 0);
+    state = setMarks(state, "p2", 20, 0, 100); state = registerCricketThrow(state, dart(20, 3)).state;
+    expect(state.status).toBe("completed"); expect(state.winnerId).toBe("p1");
+  });
+});

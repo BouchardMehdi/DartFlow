@@ -25,6 +25,14 @@ describe("Killer", () => {
     let state = makeKiller(createKillerGame(players(), 3, () => 0)); if (state.modeState.kind !== "killer") throw new Error(); const ownNumber = state.modeState.players.p0?.number; if (!ownNumber) throw new Error();
     state = registerKillerThrow(state, dart(ownNumber, 3)).state; expect(state.modeState.kind === "killer" && state.modeState.players.p0?.lives).toBe(3);
   });
+  it("peut activer les auto-dégâts", () => {
+    let state = makeKiller(createKillerGame(players(), 3, { selfDamage: true, random: () => 0 })); if (state.modeState.kind !== "killer") throw new Error(); const ownNumber = state.modeState.players.p0?.number; if (!ownNumber) throw new Error();
+    state = registerKillerThrow(state, dart(ownNumber, 2)).state; expect(state.modeState.kind === "killer" && state.modeState.players.p0?.lives).toBe(1);
+  });
+  it("permet de choisir le nombre de marques pour devenir Killer", () => {
+    let state = createKillerGame(players(), 3, { marksToKiller: 2, random: () => 0 }); if (state.modeState.kind !== "killer") throw new Error(); const number = state.modeState.players.p0?.number; if (!number) throw new Error();
+    state = registerKillerThrow(state, dart(number, 2)).state; expect(state.modeState.kind === "killer" && state.modeState.players.p0?.isKiller).toBe(true);
+  });
   it("élimine et saute automatiquement un joueur", () => {
     let state = makeKiller(createKillerGame(players(), 1, () => 0)); if (state.modeState.kind !== "killer") throw new Error(); const victimNumber = state.modeState.players.p1?.number; if (!victimNumber) throw new Error();
     state = registerKillerThrow(state, dart(victimNumber)).state; state = registerKillerThrow(state, miss()).state; state = registerKillerThrow(state, miss()).state;
