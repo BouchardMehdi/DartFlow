@@ -54,16 +54,26 @@ export interface X01ModeState {
   players: Record<string, X01PlayerState>;
 }
 
+export type AroundTheClockProgressionRule = "single-only" | "multiplier";
+export interface AroundTheClockPlayerState { target: number; completed: boolean; }
+export interface AroundTheClockModeState {
+  kind: "around-the-clock";
+  progressionRule: AroundTheClockProgressionRule;
+  bullFinish: boolean;
+  maxRounds: number | null;
+  players: Record<string, AroundTheClockPlayerState>;
+}
+
 export interface GameState {
   id: string;
-  modeId: "count-up" | "x01";
+  modeId: "count-up" | "x01" | "around-the-clock";
   status: "setup" | "in-progress" | "paused" | "completed" | "cancelled";
   players: Player[];
   currentPlayerIndex: number;
   currentRound: number;
   currentTurn: Turn;
   turns: Turn[];
-  modeState: CountUpModeState | X01ModeState;
+  modeState: CountUpModeState | X01ModeState | AroundTheClockModeState;
   winnerId?: string;
   createdAt: string;
   updatedAt: string;
