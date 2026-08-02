@@ -22,7 +22,7 @@ async function runSynchronization(user: AccountUser): Promise<string> {
   const [profiles, games, outbox] = await Promise.all([database.players.toArray(), database.games.toArray(), database.syncOutbox.toArray()]);
   const request: SyncRequest = {
     profiles: profiles.filter((profile) => (!profile.cloudUserId || profile.cloudUserId === user.id) && (!profile.cloudRole || profile.cloudRole === "owner")).map((profile) => ({ id: profile.id, name: profile.name, ...(profile.color ? { color: profile.color } : {}), ...(profile.avatar ? { avatar: profile.avatar } : {}), updatedAt: profile.updatedAt })),
-    games: games.filter((game) => !game.cloudOwnerUserId || game.cloudOwnerUserId === user.id).map((game) => ({ id: game.id, modeId: game.modeId, status: game.status, state: game, updatedAt: game.updatedAt })),
+    games: games.filter((game) => !game.cloudOwnerUserId || game.cloudOwnerUserId === user.id).map((game) => ({ id: game.id, modeId: game.modeId, status: game.status, state: game, ...(game.clubId ? { clubId: game.clubId } : {}), updatedAt: game.updatedAt })),
     deletedGameIds: outbox.filter((item) => item.entityType === "game" && item.action === "delete").map((item) => item.entityId),
   };
   try {

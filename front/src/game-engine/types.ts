@@ -18,7 +18,10 @@ export interface Player {
   order: number;
   ownerUserId?: string;
   ownerUsername?: string;
+  clubProfile?: boolean;
 }
+
+export interface GameContext { clubId: string; clubName: string }
 
 export interface Turn {
   id: string;
@@ -128,6 +131,8 @@ export interface GameState {
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+  clubId?: string;
+  clubName?: string;
 }
 
 export type GameEvent =

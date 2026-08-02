@@ -17,7 +17,7 @@ export function deduplicatePlayerProfiles(players: SavedPlayer[]): SavedPlayer[]
 export async function savePlayers(players: Player[]): Promise<void> {
   if (typeof indexedDB === "undefined") return;
   const now = new Date().toISOString();
-  const saved = await database.players.toArray();
+  const [saved, metadata] = await Promise.all([database.players.toArray(), database.syncMetadata.get("main")]);
   const byId = new Map(saved.map((player) => [player.id, player]));
   const byName = new Map(deduplicatePlayerProfiles(saved).filter((player) => !player.cloudRole || player.cloudRole === "owner").map((player) => [normalizePlayerName(player.name), player]));
   const records = new Map<string, SavedPlayer>();
@@ -25,7 +25,9 @@ export async function savePlayers(players: Player[]): Promise<void> {
     const name = player.name.trim().replace(/\s+/g, " ");
     const existing = byId.get(player.id) ?? byName.get(normalizePlayerName(name));
     const base = { id: existing?.id ?? player.id, name: existing?.name ?? name, order: player.order, createdAt: existing?.createdAt ?? now, updatedAt: now };
-    const record: SavedPlayer = { ...base, ...(existing?.color || player.color ? { color: existing?.color ?? player.color } : {}), ...(existing?.avatar || player.avatar ? { avatar: existing?.avatar ?? player.avatar } : {}), ...(existing?.cloudUserId ? { cloudUserId: existing.cloudUserId } : {}), ...(existing?.cloudRole ? { cloudRole: existing.cloudRole } : {}), ...(existing?.ownerUserId || player.ownerUserId ? { ownerUserId: existing?.ownerUserId ?? player.ownerUserId } : {}), ...(existing?.ownerUsername || player.ownerUsername ? { ownerUsername: existing?.ownerUsername ?? player.ownerUsername } : {}), ...(existing?.isPublic === undefined ? {} : { isPublic: existing.isPublic }) };
+    const clubOnly = player.clubProfile && existing?.cloudRole !== "owner";
+    const cloudUserId = existing?.cloudUserId ?? (clubOnly ? metadata?.activeUserId : undefined);
+    const record: SavedPlayer = { ...base, ...(existing?.color || player.color ? { color: existing?.color ?? player.color } : {}), ...(existing?.avatar || player.avatar ? { avatar: existing?.avatar ?? player.avatar } : {}), ...(cloudUserId ? { cloudUserId } : {}), ...(existing?.cloudRole || clubOnly ? { cloudRole: existing?.cloudRole ?? "player" } : {}), ...(existing?.ownerUserId || player.ownerUserId ? { ownerUserId: existing?.ownerUserId ?? player.ownerUserId } : {}), ...(existing?.ownerUsername || player.ownerUsername ? { ownerUsername: existing?.ownerUsername ?? player.ownerUsername } : {}), ...(player.clubProfile ? { clubProfile: true } : {}), ...(existing?.isPublic === undefined ? {} : { isPublic: existing.isPublic }) };
     records.set(record.id, record);
   }
   await database.players.bulkPut([...records.values()]);

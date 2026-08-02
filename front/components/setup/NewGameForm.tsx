@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import type { ClubProfile } from "@dartflow/shared";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { aroundTheClockConfigSchema, countUpConfigSchema, cricketConfigSchema, killerConfigSchema, shanghaiConfigSchema, trainingConfigSchema, x01ConfigSchema } from "@/src/database/schemas";
 import type { AroundTheClockProgressionRule, CricketVariant, Player, TrainingType, X01EntryRule, X01ExitRule } from "@/src/game-engine/types";
@@ -8,6 +9,7 @@ import { useGameStore } from "@/src/stores/game-store";
 import { loadPlayers, normalizePlayerName } from "@/src/database/repositories/player-repository";
 import type { SavedPlayer } from "@/src/database/database";
 import { SelectField } from "@/components/ui/SelectField";
+import { apiRequest } from "@/src/cloud/api";
 
 const COLORS = ["#c8f03d", "#ff6b35", "#57b8ff", "#f25f8b", "#b99cff", "#45d6a8", "#ffd166", "#f28f3b"];
 const makePlayer = (index: number): Player => ({ id: crypto.randomUUID(), name: `Joueur ${index + 1}`, color: COLORS[index] ?? "#c8f03d", order: index });
@@ -26,6 +28,8 @@ function shuffled(players: Player[]): Player[] {
 
 export function NewGameForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const clubId = searchParams.get("club");
   const start = useGameStore((store) => store.start);
   const startX01 = useGameStore((store) => store.startX01);
   const startAroundTheClock = useGameStore((store) => store.startAroundTheClock);
@@ -51,12 +55,25 @@ export function NewGameForm() {
   const [setsToWin, setSetsToWin] = useState(1);
   const [cricketVariant, setCricketVariant] = useState<CricketVariant>("standard");
   const [savedPlayers, setSavedPlayers] = useState<SavedPlayer[]>([]);
-  useEffect(() => { let active = true; void loadPlayers().then((profiles) => { if (active) setSavedPlayers(profiles); }).catch(() => undefined); return () => { active = false; }; }, []);
+  const [clubName, setClubName] = useState("");
+  const [clubError, setClubError] = useState("");
+  useEffect(() => {
+    let active = true;
+    if (!clubId) { void loadPlayers().then((profiles) => { if (active) setSavedPlayers(profiles); }).catch(() => undefined); return () => { active = false; }; }
+    void apiRequest<{ clubName: string; profiles: ClubProfile[] }>(`/clubs/${clubId}/play-profiles`).then((result) => {
+      if (!active) return;
+      const now = new Date().toISOString();
+      const profiles: SavedPlayer[] = result.profiles.map((profile, order) => ({ id: profile.id, name: profile.name, order, createdAt: now, updatedAt: now, cloudRole: "player", ownerUserId: profile.ownerUserId, ownerUsername: profile.ownerUsername, clubProfile: true, ...(profile.color ? { color: profile.color } : {}), ...(profile.avatar ? { avatar: profile.avatar } : {}) }));
+      setClubName(result.clubName); setSavedPlayers(profiles);
+      if (profiles.length) setPlayers(profiles.slice(0, Math.min(2, profiles.length)).map((profile, order) => ({ id: profile.id, name: profile.name, order, clubProfile: true, ...(profile.color ? { color: profile.color } : {}), ...(profile.avatar ? { avatar: profile.avatar } : {}), ...(profile.ownerUserId ? { ownerUserId: profile.ownerUserId } : {}), ...(profile.ownerUsername ? { ownerUsername: profile.ownerUsername } : {}) })));
+    }).catch((error) => { if (active) setClubError(error instanceof Error ? error.message : "Club inaccessible."); });
+    return () => { active = false; };
+  }, [clubId]);
   const isX01 = mode === "301" || mode === "501" || mode === "701";
   const trainingType = trainingTypeFor(mode); const isTraining = trainingType !== null;
   const validation = useMemo(() => mode === "count-up" ? countUpConfigSchema.safeParse({ players, rounds }) : mode === "around-the-clock" ? aroundTheClockConfigSchema.safeParse({ players, progressionRule, direction: aroundDirection, bullFinish, rounds }) : mode === "shanghai" ? shanghaiConfigSchema.safeParse({ players, rounds, startTarget: shanghaiStart, instantShanghaiWin }) : mode === "cricket" ? cricketConfigSchema.safeParse({ players, rounds, variant: cricketVariant }) : mode === "killer" ? killerConfigSchema.safeParse({ players, lives, marksToKiller, selfDamage }) : trainingType ? trainingConfigSchema.safeParse({ players, trainingType, rounds: rounds ?? 10 }) : x01ConfigSchema.safeParse({ players, startingScore: Number(mode), entryRule, exitRule, rounds, legsToWin, setsToWin }), [players, rounds, mode, trainingType, entryRule, exitRule, progressionRule, aroundDirection, bullFinish, instantShanghaiWin, shanghaiStart, lives, marksToKiller, selfDamage, legsToWin, setsToWin, cricketVariant]);
   const hasDuplicateProfiles = useMemo(() => { const identities = players.map((player) => savedPlayers.some((profile) => profile.id === player.id) ? `profile:${player.id}` : `new:${normalizePlayerName(player.name)}`).filter(Boolean); return new Set(identities).size !== identities.length; }, [players, savedPlayers]);
-  const canSubmit = validation.success && !hasDuplicateProfiles;
+  const canSubmit = validation.success && !hasDuplicateProfiles && (!clubId || players.every((player) => savedPlayers.some((profile) => profile.id === player.id)));
 
   const setPlayerCount = (count: number) => {
     setPlayers((current) => count > current.length
@@ -71,16 +88,17 @@ export function NewGameForm() {
     const resolvedPlayers = players.map((player, order) => {
       const profile = savedPlayers.find((item) => item.id === player.id) ?? profilesByName.get(normalizePlayerName(player.name));
       if (!profile) return { ...player, name: player.name.trim().replace(/\s+/g, " "), order };
-      return { id: profile.id, name: profile.name, order, ...(profile.color ? { color: profile.color } : {}), ...(profile.avatar ? { avatar: profile.avatar } : {}), ...(profile.ownerUserId ? { ownerUserId: profile.ownerUserId } : {}), ...(profile.ownerUsername ? { ownerUsername: profile.ownerUsername } : {}) };
+      return { id: profile.id, name: profile.name, order, ...(profile.color ? { color: profile.color } : {}), ...(profile.avatar ? { avatar: profile.avatar } : {}), ...(profile.ownerUserId ? { ownerUserId: profile.ownerUserId } : {}), ...(profile.ownerUsername ? { ownerUsername: profile.ownerUsername } : {}), ...(profile.clubProfile ? { clubProfile: true } : {}) };
     });
     const ordered = randomOrder ? shuffled(resolvedPlayers) : resolvedPlayers;
-    if (mode === "count-up") start(ordered, rounds ?? 8);
-    else if (mode === "around-the-clock") startAroundTheClock(ordered, progressionRule, bullFinish, rounds, aroundDirection);
-    else if (mode === "shanghai") startShanghai(ordered, rounds ?? 7, instantShanghaiWin, shanghaiStart);
-    else if (mode === "cricket") startCricket(ordered, rounds, cricketVariant);
-    else if (mode === "killer") startKiller(ordered, lives, selfDamage, marksToKiller);
-    else if (trainingType) startTraining(ordered, trainingType, rounds ?? 10);
-    else startX01(ordered, Number(mode) as 301 | 501 | 701, entryRule, exitRule, rounds, legsToWin, setsToWin);
+    const context = clubId && clubName ? { clubId, clubName } : undefined;
+    if (mode === "count-up") start(ordered, rounds ?? 8, context);
+    else if (mode === "around-the-clock") startAroundTheClock(ordered, progressionRule, bullFinish, rounds, aroundDirection, context);
+    else if (mode === "shanghai") startShanghai(ordered, rounds ?? 7, instantShanghaiWin, shanghaiStart, context);
+    else if (mode === "cricket") startCricket(ordered, rounds, cricketVariant, context);
+    else if (mode === "killer") startKiller(ordered, lives, selfDamage, marksToKiller, context);
+    else if (trainingType) startTraining(ordered, trainingType, rounds ?? 10, context);
+    else startX01(ordered, Number(mode) as 301 | 501 | 701, entryRule, exitRule, rounds, legsToWin, setsToWin, context);
     router.push("/game");
   };
 
@@ -88,7 +106,7 @@ export function NewGameForm() {
     if (playerIndex !== index) return player;
     if (!profileId) return makePlayer(index);
     const profile = savedPlayers.find((item) => item.id === profileId); if (!profile || current.some((item, itemIndex) => itemIndex !== index && item.id === profile.id)) return player;
-    return { id: profile.id, name: profile.name, order: player.order, ...(profile.color ? { color: profile.color } : {}), ...(profile.avatar ? { avatar: profile.avatar } : {}), ...(profile.ownerUserId ? { ownerUserId: profile.ownerUserId } : {}), ...(profile.ownerUsername ? { ownerUsername: profile.ownerUsername } : {}) };
+    return { id: profile.id, name: profile.name, order: player.order, ...(profile.color ? { color: profile.color } : {}), ...(profile.avatar ? { avatar: profile.avatar } : {}), ...(profile.ownerUserId ? { ownerUserId: profile.ownerUserId } : {}), ...(profile.ownerUsername ? { ownerUsername: profile.ownerUsername } : {}), ...(profile.clubProfile ? { clubProfile: true } : {}) };
   }));
 
   const updatePlayerName = (index: number, name: string) => setPlayers((current) => current.map((player, playerIndex) => {
@@ -108,6 +126,7 @@ export function NewGameForm() {
   return (
     <main className="mx-auto min-h-screen max-w-4xl px-4 py-8 sm:px-7">
       <div className="mb-7"><p className="text-xs font-black uppercase tracking-[.18em] text-[var(--lime)]">Configuration</p><h1 className="mt-2 text-4xl font-black tracking-[-.05em]">Nouvelle partie</h1></div>
+      {clubId && <div className="mb-5 rounded-2xl border border-[var(--lime)]/50 bg-[var(--lime)]/5 p-4"><p className="text-xs font-black uppercase tracking-[.16em] text-[var(--lime)]">Partie du club</p><strong className="mt-1 block text-xl">{clubName || "Chargement…"}</strong>{clubError&&<p className="mt-2 text-sm text-[#ff9b7a]">{clubError}</p>}</div>}
 
       <form onSubmit={submit} className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
         <div className="space-y-5">
@@ -134,11 +153,11 @@ export function NewGameForm() {
           {savedPlayers.length > 0 && <div className="mt-4 rounded-xl bg-black/20 p-3"><p className="text-xs font-bold uppercase tracking-[.12em] text-[var(--muted)]">Profils enregistrés</p><p className="mt-1 text-sm text-[var(--muted)]">Chaque emplacement peut utiliser un profil différent.</p></div>}
           <div className="mt-4 flex items-center justify-between"><div><p className="font-bold">Nombre de joueurs</p><p className="text-sm text-[var(--muted)]">{isTraining ? "Un seul joueur en entraînement" : "De 1 à 8 sur cet appareil"}</p></div><div className="flex items-center gap-3"><button type="button" aria-label="Retirer un joueur" disabled={players.length === 1 || isTraining} onClick={() => setPlayerCount(players.length - 1)} className="grid size-11 place-items-center rounded-xl border border-[var(--line)] text-xl disabled:opacity-30">−</button><strong className="w-5 text-center text-xl">{players.length}</strong><button type="button" aria-label="Ajouter un joueur" disabled={players.length === 8 || isTraining} onClick={() => setPlayerCount(players.length + 1)} className="grid size-11 place-items-center rounded-xl border border-[var(--line)] text-xl disabled:opacity-30">+</button></div></div>
 
-          <div className="mt-5 space-y-4">{players.map((player, index) => { const linkedProfileId = savedPlayers.some((profile) => profile.id === player.id) ? player.id : ""; return <div key={`player-slot-${index}`} className="flex items-start gap-3"><span className="mt-1 grid size-9 shrink-0 place-items-center rounded-full text-sm font-black text-black" style={{ background: player.color }}>{index + 1}</span><div className="grid min-w-0 flex-1 gap-2">{savedPlayers.length > 0 && <SelectField value={linkedProfileId} ariaLabel={`Profil du joueur ${index + 1}`} compact options={[{ value: "", label: "Nouveau profil" }, ...savedPlayers.map((profile) => ({ value: profile.id, label: profile.cloudRole && profile.cloudRole !== "owner" ? `${profile.name} · @${profile.ownerUsername ?? "ami"}` : profile.name, disabled: players.some((item, itemIndex) => itemIndex !== index && item.id === profile.id) }))]} onChange={(value) => selectProfile(index, value)} />}{linkedProfileId === "" && <label><span className="sr-only">Pseudo du joueur {index + 1}</span><input value={player.name} maxLength={40} onChange={(event) => updatePlayerName(index, event.target.value)} onBlur={() => linkExistingProfile(index)} className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[#0d0f0e] px-4 font-bold" /></label>}</div></div>; })}</div>
+          <div className="mt-5 space-y-4">{players.map((player, index) => { const linkedProfileId = savedPlayers.some((profile) => profile.id === player.id) ? player.id : ""; return <div key={`player-slot-${index}`} className="flex items-start gap-3"><span className="mt-1 grid size-9 shrink-0 place-items-center rounded-full text-sm font-black text-black" style={{ background: player.color }}>{index + 1}</span><div className="grid min-w-0 flex-1 gap-2">{savedPlayers.length > 0 && <SelectField value={linkedProfileId} ariaLabel={`Profil du joueur ${index + 1}`} compact options={[...(!clubId ? [{ value: "", label: "Nouveau profil" }] : []), ...savedPlayers.map((profile) => ({ value: profile.id, label: profile.cloudRole && profile.cloudRole !== "owner" ? `${profile.name} · @${profile.ownerUsername ?? "ami"}` : profile.name, disabled: players.some((item, itemIndex) => itemIndex !== index && item.id === profile.id) }))]} onChange={(value) => selectProfile(index, value)} />}{linkedProfileId === "" && !clubId && <label><span className="sr-only">Pseudo du joueur {index + 1}</span><input value={player.name} maxLength={40} onChange={(event) => updatePlayerName(index, event.target.value)} onBlur={() => linkExistingProfile(index)} className="min-h-12 w-full rounded-xl border border-[var(--line)] bg-[#0d0f0e] px-4 font-bold" /></label>}</div></div>; })}</div>
 
           {!isTraining && <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--line)] p-4"><input type="checkbox" checked={randomOrder} onChange={(event) => setRandomOrder(event.target.checked)} className="mt-1 size-5 accent-[var(--lime)]" /><span><strong className="block">Ordre de passage aléatoire</strong><span className="mt-1 block text-sm text-[var(--muted)]">Les joueurs seront mélangés au démarrage de la partie.</span></span></label>}
 
-          {!canSubmit && <p role="alert" className="mt-4 text-sm font-bold text-[#ff8b65]">{mode === "killer" && players.length < 2 ? "Killer nécessite au moins deux joueurs." : hasDuplicateProfiles ? "Un même profil ne peut pas jouer deux fois dans la même partie." : "Chaque joueur doit avoir un pseudo."}</p>}
+          {!canSubmit && <p role="alert" className="mt-4 text-sm font-bold text-[#ff8b65]">{mode === "killer" && players.length < 2 ? "Killer nécessite au moins deux joueurs." : hasDuplicateProfiles ? "Un même profil ne peut pas jouer deux fois dans la même partie." : clubId ? "Choisis un profil du club pour chaque joueur." : "Chaque joueur doit avoir un pseudo."}</p>}
           <button type="submit" disabled={!canSubmit} className="mt-6 min-h-14 w-full rounded-2xl bg-[var(--lime)] px-6 font-black text-black disabled:cursor-not-allowed disabled:opacity-35">Démarrer la partie →</button>
         </section>
       </form>

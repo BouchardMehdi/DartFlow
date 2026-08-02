@@ -11,6 +11,7 @@ const links = [
   { href: "/history", label: "Historique" },
   { href: "/stats", label: "Statistiques" },
   { href: "/leaderboard", label: "Classement" },
+  { href: "/clubs", label: "Clubs" },
   { href: "/account", label: "Compte" },
 ] as const;
 
@@ -88,7 +89,7 @@ export function SiteNavigation() {
             aria-label="Navigation mobile"
             className="fixed right-4 top-20 z-50 w-[min(19rem,calc(100vw-2rem))] rounded-2xl border border-[var(--line)] bg-[#141715] p-2 shadow-2xl shadow-black/70 lg:hidden"
           >
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               {links.map((link) => (
                 <Link
                   key={link.href}

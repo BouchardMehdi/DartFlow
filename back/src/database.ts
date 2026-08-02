@@ -18,6 +18,31 @@ UPDATE users SET username = 'joueur_' || substring(replace(id, '-', ''), 1, 12) 
 ALTER TABLE users ALTER COLUMN username SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique ON users(lower(username));
 
+CREATE TABLE IF NOT EXISTS clubs (
+  id text PRIMARY KEY,
+  owner_user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name varchar(60) NOT NULL,
+  slug varchar(80) NOT NULL UNIQUE,
+  description varchar(300) NOT NULL DEFAULT '',
+  visibility text NOT NULL DEFAULT 'private' CHECK(visibility IN ('private','public')),
+  invite_code varchar(32) NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS club_members (
+  club_id text NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role text NOT NULL CHECK(role IN ('owner','admin','member')),
+  status text NOT NULL CHECK(status IN ('pending','active','former')),
+  invited_by text REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  joined_at timestamptz,
+  left_at timestamptz,
+  PRIMARY KEY(club_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS club_members_user_idx ON club_members(user_id,status);
+
 CREATE TABLE IF NOT EXISTS profiles (
   id text PRIMARY KEY,
   owner_user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -33,6 +58,21 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE UNIQUE INDEX IF NOT EXISTS profiles_owner_name_unique
   ON profiles(owner_user_id, normalized_name) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS profiles_updated_idx ON profiles(updated_at);
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS guest_club_id text;
+CREATE INDEX IF NOT EXISTS profiles_guest_club_idx ON profiles(guest_club_id) WHERE guest_club_id IS NOT NULL;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profiles_guest_club_fk') THEN
+    ALTER TABLE profiles ADD CONSTRAINT profiles_guest_club_fk FOREIGN KEY(guest_club_id) REFERENCES clubs(id) ON DELETE CASCADE;
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS club_profiles (
+  club_id text NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+  profile_id text NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  shared_by text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(club_id,profile_id)
+);
 
 CREATE TABLE IF NOT EXISTS profile_access (
   profile_id text NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -68,6 +108,13 @@ CREATE TABLE IF NOT EXISTS games (
 );
 CREATE INDEX IF NOT EXISTS games_owner_updated_idx ON games(owner_user_id, updated_at);
 CREATE INDEX IF NOT EXISTS games_leaderboard_idx ON games(mode_id, status) WHERE deleted_at IS NULL;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS club_id text;
+CREATE INDEX IF NOT EXISTS games_club_idx ON games(club_id,status) WHERE club_id IS NOT NULL AND deleted_at IS NULL;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'games_club_fk') THEN
+    ALTER TABLE games ADD CONSTRAINT games_club_fk FOREIGN KEY(club_id) REFERENCES clubs(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS refresh_sessions (
   id text PRIMARY KEY,

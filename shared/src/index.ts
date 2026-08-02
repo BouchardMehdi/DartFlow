@@ -29,6 +29,7 @@ export interface CloudGame {
   state: unknown;
   version: number;
   ownerUserId: string;
+  clubId?: string;
   updatedAt: string;
 }
 
@@ -45,6 +46,7 @@ export interface GameSyncInput {
   modeId: string;
   status: string;
   state: unknown;
+  clubId?: string;
   updatedAt: string;
 }
 
@@ -96,4 +98,77 @@ export interface LeaderboardRow {
   dartsThrown: number;
   averagePerDart: number;
   bestTurn: number;
+}
+
+export type ClubRole = "owner" | "admin" | "member";
+export type ClubMembershipStatus = "pending" | "active" | "former";
+
+export interface ClubSummary {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  visibility: "private" | "public";
+  role?: ClubRole;
+  membershipStatus?: ClubMembershipStatus;
+  memberCount: number;
+  profileCount: number;
+  createdAt: string;
+}
+
+export interface ClubMember {
+  userId: string;
+  username: string;
+  avatar?: string;
+  role: ClubRole;
+  status: ClubMembershipStatus;
+  joinedAt?: string;
+}
+
+export interface ClubProfile {
+  id: string;
+  name: string;
+  color?: string;
+  avatar?: string;
+  ownerUserId: string;
+  ownerUsername: string;
+  kind: "personal" | "guest";
+  canManage: boolean;
+}
+
+export interface ClubStatisticRow {
+  rank: number;
+  profileId: string;
+  name: string;
+  ownerUsername: string;
+  kind: "personal" | "guest";
+  games: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  dartsThrown: number;
+  turnsPlayed: number;
+  pointsScored: number;
+  averagePerDart: number;
+  averagePerTurn: number;
+  bestTurn: number;
+}
+
+export interface ClubGameMode {
+  key: string;
+  label: string;
+}
+
+export interface ClubStatistics {
+  club: { id: string; name: string };
+  selectedMode: string;
+  modes: ClubGameMode[];
+  leaderboard: ClubStatisticRow[];
+}
+
+export interface ClubDetail {
+  club: ClubSummary & { inviteCode?: string };
+  members: ClubMember[];
+  profiles: ClubProfile[];
+  availableProfiles: ClubProfile[];
 }

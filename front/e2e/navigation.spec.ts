@@ -21,6 +21,7 @@ test("permet de naviguer entre les pages depuis le menu mobile", async ({
   await expect(
     navigation.getByRole("link", { name: "Classement" }),
   ).toBeVisible();
+  await expect(navigation.getByRole("link", { name: "Clubs" })).toBeVisible();
   await expect(navigation.getByRole("link", { name: "Compte" })).toBeVisible();
 
   await navigation.getByRole("link", { name: "Statistiques" }).click();
