@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SavedPlayer } from "@/src/database/database";
 import { buildProfileStatistics } from "@/src/statistics/profile-statistics";
+import { createX01Game } from "@/src/game-engine/x01";
 import type { GameState } from "@/src/game-engine/types";
 
 describe("buildProfileStatistics", () => {
@@ -12,5 +13,21 @@ describe("buildProfileStatistics", () => {
     const result = buildProfileStatistics([profile], [game]);
     expect(result[0]?.totals).toMatchObject({ games: 1, wins: 1, dartsThrown: 1, bestTurn: 60, averagePerDart: 60 });
     expect(result[0]?.modes[0]?.label).toBe("Count-Up");
+  });
+
+  it("sépare les statistiques 301, 501 et 701", () => {
+    const profile: SavedPlayer = { id: "p1", name: "Alice", order: 0, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+    const games = ([301, 501, 701] as const).map((score) => {
+      const game = createX01Game([{ id: "p1", name: "Alice", order: 0 }], score, "straight", "double");
+      return { ...game, status: "completed" as const, winnerId: "p1", completedAt: game.updatedAt };
+    });
+
+    const result = buildProfileStatistics([profile], games);
+
+    expect(result[0]?.modes.map(({ key, label, games: count }) => ({ key, label, count }))).toEqual([
+      { key: "x01-301", label: "301", count: 1 },
+      { key: "x01-501", label: "501", count: 1 },
+      { key: "x01-701", label: "701", count: 1 },
+    ]);
   });
 });

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { CloudStatusBadge } from "@/components/cloud/CloudStatusBadge";
+import { AccountHeaderAvatar } from "@/components/account/AccountHeaderAvatar";
 
 const links = [
   { href: "/", label: "Accueil" },
@@ -62,7 +62,7 @@ export function SiteNavigation() {
           </nav>
 
           <div className="ml-auto lg:ml-2">
-            <CloudStatusBadge />
+            <AccountHeaderAvatar />
           </div>
           <button
             type="button"

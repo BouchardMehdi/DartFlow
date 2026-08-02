@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS username text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar text;
 UPDATE users SET username = 'joueur_' || substring(replace(id, '-', ''), 1, 12) WHERE username IS NULL;
 ALTER TABLE users ALTER COLUMN username SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique ON users(lower(username));

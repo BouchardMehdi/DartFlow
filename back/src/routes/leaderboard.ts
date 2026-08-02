@@ -3,13 +3,19 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { pool } from "../database.js";
 
-const querySchema = z.object({ mode: z.string().max(40).optional() });
+const querySchema = z.object({ mode: z.enum(["count-up", "301", "501", "701", "around-the-clock", "shanghai", "cricket", "killer"]).optional() });
 interface Row { profile_id: string; name: string; owner_username: string; games: string; wins: string; darts_thrown: string; points_scored: string; best_turn: number }
 
 const leaderboardRoutes: FastifyPluginAsync = async (app) => {
   app.get("/", async (request, reply) => {
     const parsed = querySchema.safeParse(request.query); if (!parsed.success) return reply.code(400).send({ message: "Filtre invalide." });
-    const params: unknown[] = []; const modeFilter = parsed.data.mode ? (params.push(parsed.data.mode), "AND g.mode_id=$1") : "AND g.mode_id<>'training'";
+    const params: unknown[] = [];
+    const selectedMode = parsed.data.mode;
+    const modeFilter = selectedMode === "301" || selectedMode === "501" || selectedMode === "701"
+      ? (params.push("x01", selectedMode), "AND g.mode_id=$1 AND g.state->'modeState'->>'startingScore'=$2")
+      : selectedMode
+        ? (params.push(selectedMode), "AND g.mode_id=$1")
+        : "AND g.mode_id<>'training'";
     const result = await pool.query<Row>(`SELECT p.id profile_id,p.name,u.username owner_username,COUNT(DISTINCT gp.game_id)::text games,
       COUNT(DISTINCT gp.game_id) FILTER(WHERE gp.is_winner)::text wins,COALESCE(SUM(gp.darts_thrown),0)::text darts_thrown,
       COALESCE(SUM(gp.points_scored),0)::text points_scored,COALESCE(MAX(gp.best_turn),0) best_turn
