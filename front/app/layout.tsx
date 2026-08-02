@@ -2,21 +2,30 @@ import type { Metadata, Viewport } from "next";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import "./globals.css";
 import { CloudProvider } from "@/components/cloud/CloudProvider";
+import { SiteNavigation } from "@/components/layout/SiteNavigation";
 
 export const metadata: Metadata = {
   title: "DartFlow — Compteur de fléchettes",
-  description: "Comptez vos points de fléchettes, simplement et sans connexion.",
+  description:
+    "Comptez vos points de fléchettes, simplement et sans connexion.",
   icons: {
     icon: "/icons/dartflow.svg",
     shortcut: "/icons/dartflow.svg",
     apple: "/icons/dartflow.svg",
   },
   applicationName: "DartFlow",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "DartFlow" },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "DartFlow",
+  },
   formatDetection: { telephone: false },
 };
 
-export const viewport: Viewport = { themeColor: "#0d0f0e", colorScheme: "dark" };
+export const viewport: Viewport = {
+  themeColor: "#0d0f0e",
+  colorScheme: "dark",
+};
 
 export default function RootLayout({
   children,
@@ -25,7 +34,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr">
-      <body><SerwistProvider swUrl="/serwist/sw.js"><CloudProvider>{children}</CloudProvider></SerwistProvider></body>
+      <body>
+        <SerwistProvider swUrl="/serwist/sw.js">
+          <CloudProvider>
+            <SiteNavigation />
+            {children}
+          </CloudProvider>
+        </SerwistProvider>
+      </body>
     </html>
   );
 }

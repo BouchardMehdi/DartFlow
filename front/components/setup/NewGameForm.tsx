@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { aroundTheClockConfigSchema, countUpConfigSchema, cricketConfigSchema, killerConfigSchema, shanghaiConfigSchema, trainingConfigSchema, x01ConfigSchema } from "@/src/database/schemas";
@@ -107,11 +106,8 @@ export function NewGameForm() {
   }));
 
   return (
-    <main className="mx-auto min-h-screen max-w-4xl px-4 py-5 sm:px-7">
-      <header className="mb-8 flex items-center justify-between border-b border-[var(--line)] pb-4">
-        <Link href="/" className="font-bold text-[var(--muted)] hover:text-white">← Accueil</Link>
-        <span className="text-sm font-black tracking-[.14em]">NOUVELLE PARTIE</span>
-      </header>
+    <main className="mx-auto min-h-screen max-w-4xl px-4 py-8 sm:px-7">
+      <div className="mb-7"><p className="text-xs font-black uppercase tracking-[.18em] text-[var(--lime)]">Configuration</p><h1 className="mt-2 text-4xl font-black tracking-[-.05em]">Nouvelle partie</h1></div>
 
       <form onSubmit={submit} className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
         <div className="space-y-5">

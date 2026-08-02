@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { deleteSavedGame, loadCompletedGames } from "@/src/database/repositories/game-repository";
 import { loadPlayers, normalizePlayerName } from "@/src/database/repositories/player-repository";
@@ -36,8 +35,7 @@ export function HistoryScreen() {
     await deleteSavedGame(game.id); setGames((current) => current.filter((item) => item.id !== game.id));
   };
 
-  return <main className="mx-auto min-h-screen max-w-5xl px-4 py-5 sm:px-7">
-    <header className="mb-8 flex items-center justify-between border-b border-[var(--line)] pb-4"><Link href="/" className="font-bold text-[var(--muted)] hover:text-white">← Accueil</Link><span className="text-sm font-black tracking-[.14em]">HISTORIQUE</span></header>
+  return <main className="mx-auto min-h-screen max-w-5xl px-4 py-8 sm:px-7">
     <section><p className="text-xs font-black uppercase tracking-[.18em] text-[var(--lime)]">Profils</p><h1 className="mt-2 text-4xl font-black tracking-[-.05em]">Statistiques des joueurs</h1>
       {profileStats.length > 0 ? <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{profileStats.map(({ player, games: count, wins, darts, average }) => <article key={player.id} className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4"><div className="flex items-center gap-2"><span className="size-2 rounded-full" style={{ background: player.color ?? "var(--lime)" }} /><span><strong className="block">{player.name}</strong>{player.ownerUsername&&<span className="text-xs text-[var(--muted)]">@{player.ownerUsername}</span>}</span></div><dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-[var(--muted)]">Parties</dt><dd className="text-xl font-black">{count}</dd></div><div><dt className="text-[var(--muted)]">Victoires</dt><dd className="text-xl font-black">{wins} <small className="text-xs text-[var(--muted)]">({Math.round(wins / count * 100)} %)</small></dd></div><div><dt className="text-[var(--muted)]">Fléchettes</dt><dd className="font-black">{darts}</dd></div><div><dt className="text-[var(--muted)]">Moy. / flèche</dt><dd className="font-black">{average.toFixed(1)}</dd></div></dl></article>)}</div> : !loading && <p className="mt-5 rounded-2xl border border-[var(--line)] p-5 text-[var(--muted)]">Les statistiques apparaîtront après votre première partie terminée.</p>}
     </section>
