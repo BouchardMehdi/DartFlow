@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { Dartboard } from "@/components/dartboard/Dartboard";
+import { TurnHistory } from "@/components/game/TurnHistory";
 import { AnimationOverlay } from "@/components/animations/AnimationOverlay";
 import { suggestCheckouts } from "@/src/game-engine/checkouts/checkout-service";
 import { createDart } from "@/src/game-engine/score-calculator";
@@ -56,6 +57,7 @@ export function CountUpDemo() {
           </div>
 
           <div className="grid grid-cols-2 gap-3"><button type="button" onClick={undo} disabled={history.past.length === 0} className="min-h-12 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-4 font-bold disabled:cursor-not-allowed disabled:opacity-35">↶ Annuler</button><button type="button" onClick={() => throwDart(createDart(null, 0, "miss"))} disabled={game.status !== "in-progress"} className="min-h-12 rounded-xl bg-[var(--ink)] px-4 font-black text-black disabled:opacity-35">Lancer manqué</button></div>
+          <TurnHistory turns={game.turns} players={game.players} />
         </div>
 
         <div className="grid place-items-center rounded-[2rem] border border-[var(--line)] bg-[radial-gradient(circle,#222622_0%,#111311_68%)] p-3 sm:p-6"><Dartboard onThrow={throwDart} disabled={game.status !== "in-progress"} /></div>
