@@ -1,0 +1,10 @@
+.git
+.next
+front/.next
+node_modules
+front/node_modules
+back/node_modules
+shared/node_modules
+coverage
+*.log
+.env

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import "./globals.css";
+import { CloudProvider } from "@/components/cloud/CloudProvider";
 
 export const metadata: Metadata = {
   title: "DartFlow — Compteur de fléchettes",
@@ -24,7 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr">
-      <body><SerwistProvider swUrl="/serwist/sw.js">{children}</SerwistProvider></body>
+      <body><SerwistProvider swUrl="/serwist/sw.js"><CloudProvider>{children}</CloudProvider></SerwistProvider></body>
     </html>
   );
 }

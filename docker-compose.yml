@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dartflow}
+      POSTGRES_USER: ${POSTGRES_USER:-dartflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dartflow-local}
+    volumes:
+      - dartflow-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dartflow} -d ${POSTGRES_DB:-dartflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  back:
+    build:
+      context: .
+      dockerfile: back/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgres://${POSTGRES_USER:-dartflow}:${POSTGRES_PASSWORD:-dartflow-local}@postgres:5432/${POSTGRES_DB:-dartflow}
+      JWT_SECRET: ${JWT_SECRET:?Définissez JWT_SECRET dans le fichier .env}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  front:
+    build:
+      context: .
+      dockerfile: front/Dockerfile
+      args:
+        BACKEND_INTERNAL_URL: http://back:4000
+    restart: unless-stopped
+    environment:
+      BACKEND_INTERNAL_URL: http://back:4000
+    ports:
+      - "${FRONT_PORT:-3000}:3000"
+    depends_on:
+      back:
+        condition: service_healthy
+
+volumes:
+  dartflow-postgres:

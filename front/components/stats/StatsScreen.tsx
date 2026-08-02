@@ -1,0 +1,21 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { SelectField } from "@/components/ui/SelectField";
+import { loadAllGames } from "@/src/database/repositories/game-repository";
+import { loadPlayers } from "@/src/database/repositories/player-repository";
+import { buildProfileStatistics } from "@/src/statistics/profile-statistics";
+import type { GameState } from "@/src/game-engine/types";
+import type { SavedPlayer } from "@/src/database/database";
+
+const Metric = ({ label, value }: { label: string; value: string | number }) => <div className="rounded-xl bg-black/20 p-3"><dt className="text-xs text-[var(--muted)]">{label}</dt><dd className="mt-1 text-xl font-black">{value}</dd></div>;
+
+export function StatsScreen() {
+  const [profiles, setProfiles] = useState<SavedPlayer[]>([]); const [games, setGames] = useState<GameState[]>([]); const [selectedId, setSelectedId] = useState(""); const [loading, setLoading] = useState(true);
+  useEffect(() => { void Promise.all([loadPlayers(), loadAllGames()]).then(([savedProfiles, savedGames]) => { setProfiles(savedProfiles); setGames(savedGames); setSelectedId(savedProfiles[0]?.id ?? ""); }).finally(() => setLoading(false)); }, []);
+  const stats = useMemo(() => buildProfileStatistics(profiles, games), [profiles, games]);
+  const activeId = stats.some((item) => item.profile.id === selectedId) ? selectedId : stats[0]?.profile.id ?? "";
+  const selected = stats.find((item) => item.profile.id === activeId);
+  return <main className="mx-auto min-h-screen max-w-5xl px-4 py-5 sm:px-7"><header className="mb-8 flex items-center justify-between border-b border-[var(--line)] pb-4"><Link href="/" className="font-bold text-[var(--muted)] hover:text-white">← Accueil</Link><span className="text-sm font-black tracking-[.14em]">STATISTIQUES</span></header><p className="text-xs font-black uppercase tracking-[.18em] text-[var(--lime)]">Performances globales</p><h1 className="mt-2 text-4xl font-black tracking-[-.05em]">Statistiques par mode</h1>{loading ? <p className="mt-6 text-[var(--muted)]">Chargement…</p> : stats.length === 0 ? <p className="mt-6 rounded-2xl border border-[var(--line)] p-5 text-[var(--muted)]">Termine une première partie pour afficher les statistiques.</p> : <><div className="mt-5 max-w-sm"><SelectField value={activeId} ariaLabel="Profil à analyser" options={stats.map((item) => ({ value: item.profile.id, label: item.profile.name }))} onChange={setSelectedId} /></div>{selected && <><section className="mt-5 rounded-[1.6rem] border border-[var(--lime)]/50 bg-[var(--panel)] p-5"><div className="flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-[.16em] text-[var(--lime)]">Vue d’ensemble</p><h2 className="mt-1 text-3xl font-black">{selected.profile.name}</h2></div><span className="size-4 rounded-full" style={{ background: selected.profile.color ?? "var(--lime)" }} /></div><dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6"><Metric label="Parties" value={selected.totals.games} /><Metric label="Victoires" value={selected.totals.wins} /><Metric label="Fléchettes" value={selected.totals.dartsThrown} /><Metric label="Meilleur tour" value={selected.totals.bestTurn} /><Metric label="Moy. / tour" value={selected.totals.averagePerTurn.toFixed(1)} /><Metric label="Moy. / flèche" value={selected.totals.averagePerDart.toFixed(1)} /></dl></section><section className="mt-6 grid gap-4 md:grid-cols-2">{selected.modes.map((item) => <article key={item.key} className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5"><div className="flex items-center justify-between"><h3 className="text-xl font-black">{item.label}</h3><span className="rounded-full bg-[var(--lime)]/10 px-3 py-1 text-xs font-bold text-[var(--lime)]">{item.games} partie{item.games > 1 ? "s" : ""}</span></div><dl className="mt-4 grid grid-cols-2 gap-3"><Metric label="Victoires" value={`${item.wins} (${item.games ? Math.round(item.wins / item.games * 100) : 0} %)`} /><Metric label="Meilleur tour" value={item.bestTurn} /><Metric label="Moy. / tour" value={item.averagePerTurn.toFixed(1)} /><Metric label="Moy. / flèche" value={item.averagePerDart.toFixed(1)} /></dl></article>)}</section></>}</>}</main>;
+}

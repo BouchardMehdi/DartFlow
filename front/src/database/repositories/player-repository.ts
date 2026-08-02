@@ -1,5 +1,6 @@
 import { database, type SavedPlayer } from "@/src/database/database";
 import type { Player } from "@/src/game-engine/types";
+import { notifyCloudDataChanged } from "@/src/cloud/events";
 
 export const normalizePlayerName = (name: string) => name.trim().replace(/\s+/g, " ").toLocaleLowerCase("fr-FR");
 
@@ -24,10 +25,11 @@ export async function savePlayers(players: Player[]): Promise<void> {
     const name = player.name.trim().replace(/\s+/g, " ");
     const existing = byName.get(normalizePlayerName(name)) ?? byId.get(player.id);
     const base = { id: existing?.id ?? player.id, name: existing?.name ?? name, order: player.order, createdAt: existing?.createdAt ?? now, updatedAt: now };
-    const record: SavedPlayer = { ...base, ...(existing?.color || player.color ? { color: existing?.color ?? player.color } : {}), ...(existing?.avatar || player.avatar ? { avatar: existing?.avatar ?? player.avatar } : {}) };
+    const record: SavedPlayer = { ...base, ...(existing?.color || player.color ? { color: existing?.color ?? player.color } : {}), ...(existing?.avatar || player.avatar ? { avatar: existing?.avatar ?? player.avatar } : {}), ...(existing?.cloudUserId ? { cloudUserId: existing.cloudUserId } : {}), ...(existing?.cloudRole ? { cloudRole: existing.cloudRole } : {}), ...(existing?.ownerEmail ? { ownerEmail: existing.ownerEmail } : {}), ...(existing?.isPublic === undefined ? {} : { isPublic: existing.isPublic }) };
     records.set(record.id, record);
   }
   await database.players.bulkPut([...records.values()]);
+  notifyCloudDataChanged();
 }
 
 export async function loadPlayers(): Promise<SavedPlayer[]> {

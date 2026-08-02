@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { ResumeGameCard } from "@/components/home/ResumeGameCard";
 import { InstallAppButton } from "@/components/pwa/InstallAppButton";
+import { CloudStatusBadge } from "@/components/cloud/CloudStatusBadge";
 
 export default function Home() {
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col px-5 py-6 sm:px-8">
       <header className="flex items-center gap-3 border-b border-[var(--line)] pb-5">
         <span className="grid size-10 place-items-center rounded-full bg-[var(--lime)] text-xl font-black text-black">↗</span>
-        <div><p className="text-xl font-black tracking-[-.05em]">DARTFLOW</p><p className="text-[10px] uppercase tracking-[.24em] text-[var(--muted)]">Votre partie. Votre rythme.</p></div>
+        <div className="min-w-0 flex-1"><p className="text-xl font-black tracking-[-.05em]">DARTFLOW</p><p className="text-[10px] uppercase tracking-[.24em] text-[var(--muted)]">Votre partie. Votre rythme.</p></div><CloudStatusBadge />
       </header>
 
       <section className="flex flex-1 flex-col justify-center py-14">
@@ -19,10 +20,11 @@ export default function Home() {
           <Link href="/history" className="grid min-h-14 place-items-center rounded-2xl border border-[var(--line)] px-7 font-bold text-[var(--muted)] hover:text-white">Historique</Link>
           <InstallAppButton />
         </div>
+        <nav className="mt-3 flex flex-wrap gap-2"><Link href="/stats" className="rounded-xl border border-[var(--line)] px-4 py-2 text-sm font-bold text-[var(--muted)] hover:text-white">Statistiques</Link><Link href="/leaderboard" className="rounded-xl border border-[var(--line)] px-4 py-2 text-sm font-bold text-[var(--muted)] hover:text-white">Classement en ligne</Link><Link href="/account" className="rounded-xl border border-[var(--line)] px-4 py-2 text-sm font-bold text-[var(--muted)] hover:text-white">Compte et partage</Link></nav>
         <ResumeGameCard />
       </section>
 
-      <footer className="border-t border-[var(--line)] pt-4 text-xs text-[var(--muted)]">Count‑Up disponible · Fonctionne entièrement sur cet appareil</footer>
+      <footer className="border-t border-[var(--line)] pt-4 text-xs text-[var(--muted)]">Fonctionne hors ligne · Synchronisation cloud facultative</footer>
     </main>
   );
 }
