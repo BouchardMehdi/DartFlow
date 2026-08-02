@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { deleteSavedGame, loadCompletedGames } from "@/src/database/repositories/game-repository";
-import { loadPlayers } from "@/src/database/repositories/player-repository";
+import { loadPlayers, normalizePlayerName } from "@/src/database/repositories/player-repository";
 import type { SavedPlayer } from "@/src/database/database";
 import { getFinalStandings } from "@/src/game-engine/statistics";
 import type { GameState } from "@/src/game-engine/types";
@@ -21,9 +21,10 @@ export function HistoryScreen() {
   useEffect(() => { let active = true; void Promise.all([loadCompletedGames(), loadPlayers()]).then(([savedGames, savedPlayers]) => { if (!active) return; setGames(savedGames); setPlayers(savedPlayers); setLoading(false); }).catch(() => { if (active) setLoading(false); }); return () => { active = false; }; }, []);
 
   const profileStats = useMemo(() => players.map((player) => {
-    const played = games.filter((game) => game.players.some((item) => item.id === player.id));
-    const standings = played.flatMap((game) => getFinalStandings(game).filter((standing) => standing.playerId === player.id));
-    const wins = played.filter((game) => game.winnerId === player.id).length;
+    const normalizedName = normalizePlayerName(player.name);
+    const played = games.filter((game) => game.players.some((item) => normalizePlayerName(item.name) === normalizedName));
+    const standings = played.flatMap((game) => { const matchingIds = new Set(game.players.filter((item) => normalizePlayerName(item.name) === normalizedName).map((item) => item.id)); return getFinalStandings(game).filter((standing) => matchingIds.has(standing.playerId)); });
+    const wins = played.filter((game) => { const winner = game.players.find((item) => item.id === game.winnerId); return winner && normalizePlayerName(winner.name) === normalizedName; }).length;
     const darts = standings.reduce((sum, standing) => sum + standing.dartsThrown, 0);
     const weightedScore = standings.reduce((sum, standing) => sum + standing.averagePerDart * standing.dartsThrown, 0);
     return { player, games: played.length, wins, darts, average: darts === 0 ? 0 : weightedScore / darts };
