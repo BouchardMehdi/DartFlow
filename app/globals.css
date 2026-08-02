@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #f4f1e8;
+  --muted: #a9aaa5;
+  --panel: #171918;
+  --line: #303330;
+  --lime: #c8f03d;
+  --orange: #ff6b35;
+}
+
+* { box-sizing: border-box; }
+html { background: #0d0f0e; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 50% -10%, rgba(200,240,61,.12), transparent 32rem),
+    #0d0f0e;
+  font-family: Arial, Helvetica, sans-serif;
+}
+button, input, select { font: inherit; }
+button { touch-action: manipulation; }
+button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 3px solid var(--lime);
+  outline-offset: 3px;
+}
+
+.dart-segment { cursor: pointer; transition: filter 120ms ease, opacity 120ms ease; }
+.dart-segment:hover, .dart-segment:focus-visible { filter: brightness(1.35); }
+.dart-segment:active { opacity: .65; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
