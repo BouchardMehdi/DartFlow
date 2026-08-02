@@ -64,16 +64,23 @@ export interface AroundTheClockModeState {
   players: Record<string, AroundTheClockPlayerState>;
 }
 
+export interface ShanghaiModeState {
+  kind: "shanghai";
+  maxRounds: number;
+  instantShanghaiWin: boolean;
+  scores: Record<string, number>;
+}
+
 export interface GameState {
   id: string;
-  modeId: "count-up" | "x01" | "around-the-clock";
+  modeId: "count-up" | "x01" | "around-the-clock" | "shanghai";
   status: "setup" | "in-progress" | "paused" | "completed" | "cancelled";
   players: Player[];
   currentPlayerIndex: number;
   currentRound: number;
   currentTurn: Turn;
   turns: Turn[];
-  modeState: CountUpModeState | X01ModeState | AroundTheClockModeState;
+  modeState: CountUpModeState | X01ModeState | AroundTheClockModeState | ShanghaiModeState;
   winnerId?: string;
   createdAt: string;
   updatedAt: string;
@@ -92,6 +99,7 @@ export type GameEvent =
   | { type: "SCORE_100_PLUS"; score: number }
   | { type: "SCORE_140_PLUS"; score: number }
   | { type: "SCORE_180"; score: 180 }
+  | { type: "SHANGHAI"; playerId: string; target: number }
   | { type: "GAME_WON"; playerId: string };
 
 export interface EngineResult { state: GameState; events: GameEvent[]; }

@@ -14,7 +14,7 @@ export interface FinalStanding {
 }
 
 export function getFinalStandings(game: GameState): FinalStanding[] {
-  const scoreFor = (playerId: string) => game.modeState.kind === "count-up" ? game.modeState.scores[playerId] ?? 0 : game.modeState.kind === "x01" ? game.modeState.players[playerId]?.score ?? game.modeState.startingScore : game.modeState.players[playerId]?.target ?? 1;
+  const scoreFor = (playerId: string) => game.modeState.kind === "count-up" || game.modeState.kind === "shanghai" ? game.modeState.scores[playerId] ?? 0 : game.modeState.kind === "x01" ? game.modeState.players[playerId]?.score ?? game.modeState.startingScore : game.modeState.players[playerId]?.target ?? 1;
   const sorted = [...game.players].sort((a, b) => {
     const difference = game.modeState.kind === "x01" ? scoreFor(a.id) - scoreFor(b.id) : scoreFor(b.id) - scoreFor(a.id);
     return difference || a.order - b.order;
