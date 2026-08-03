@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import type { ClubDetail, ClubGameMode, ClubMember, ClubProfile, ClubStatisticRow, ClubStatistics, ClubSummary } from "@dartflow/shared";
+import type { ClubChat, ClubDetail, ClubGameMode, ClubMember, ClubMessage, ClubProfile, ClubStatisticRow, ClubStatistics, ClubSummary } from "@dartflow/shared";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
 import { pool } from "../database.js";
@@ -9,9 +9,12 @@ const clubParams = z.object({ clubId: z.string().min(1).max(100) });
 const statisticsQuery = z.object({ mode: z.string().max(60).regex(/^[a-z0-9-]+$/).default("all") });
 const memberParams = clubParams.extend({ userId: z.string().min(1).max(100) });
 const profileParams = clubParams.extend({ profileId: z.string().min(1).max(100) });
+const messageParams = clubParams.extend({ messageId: z.string().uuid() });
 const clubInput = z.object({ name: z.string().trim().min(2).max(60), description: z.string().trim().max(300).default(""), visibility: z.enum(["private", "public"]).default("private") });
 const clubUpdateInput = z.object({ name: z.string().trim().min(2).max(60).optional(), description: z.string().trim().max(300).optional(), visibility: z.enum(["private", "public"]).optional() }).refine((value) => Object.values(value).some((item) => item !== undefined));
 const guestInput = z.object({ name: z.string().trim().min(1).max(30), color: z.string().max(100).optional() });
+const avatarInput = z.object({ avatar: z.string().max(750_000).regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/).nullable() });
+const messageInput = z.object({ content: z.string().trim().min(1).max(1000) });
 const code = () => randomBytes(6).toString("hex").toUpperCase();
 const slugBase = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 55) || "club";
 const gameModeKeySql = `CASE
@@ -36,16 +39,16 @@ async function requireActive(userId: string, clubId: string, reply: FastifyReply
 }
 const isAdmin = (role: Membership["role"]) => role === "owner" || role === "admin";
 
-interface ClubRow { id: string; name: string; slug: string; description: string; visibility: "private" | "public"; invite_code: string; role?: Membership["role"]; membership_status?: Membership["status"]; member_count: string; profile_count: string; created_at: Date }
-const mapClub = (row: ClubRow): ClubSummary => ({ id: row.id, name: row.name, slug: row.slug, description: row.description, visibility: row.visibility, ...(row.role ? { role: row.role } : {}), ...(row.membership_status ? { membershipStatus: row.membership_status } : {}), memberCount: Number(row.member_count), profileCount: Number(row.profile_count), createdAt: row.created_at.toISOString() });
+interface ClubRow { id: string; name: string; avatar: string | null; slug: string; description: string; visibility: "private" | "public"; invite_code: string; role?: Membership["role"]; membership_status?: Membership["status"]; member_count: string; profile_count: string; created_at: Date }
+const mapClub = (row: ClubRow): ClubSummary => ({ id: row.id, name: row.name, ...(row.avatar ? { avatar: row.avatar } : {}), slug: row.slug, description: row.description, visibility: row.visibility, ...(row.role ? { role: row.role } : {}), ...(row.membership_status ? { membershipStatus: row.membership_status } : {}), memberCount: Number(row.member_count), profileCount: Number(row.profile_count), createdAt: row.created_at.toISOString() });
 
 async function profilesForClub(clubId: string, userId: string, administrator: boolean): Promise<ClubProfile[]> {
-  const result = await pool.query<{ id: string; name: string; color: string | null; avatar: string | null; owner_user_id: string; owner_username: string; kind: "personal" | "guest" }>(`SELECT p.id,p.name,p.color,p.avatar,p.owner_user_id,
+  const result = await pool.query<{ id: string; name: string; color: string | null; avatar: string | null; avatar_override: boolean; owner_user_id: string; owner_username: string; kind: "personal" | "guest" }>(`SELECT p.id,p.name,p.color,COALESCE(cp.avatar,p.avatar) avatar,(cp.avatar IS NOT NULL) avatar_override,p.owner_user_id,
     CASE WHEN p.guest_club_id IS NOT NULL THEN c.name ELSE u.username END owner_username,
     CASE WHEN p.guest_club_id IS NOT NULL THEN 'guest' ELSE 'personal' END kind
     FROM club_profiles cp JOIN profiles p ON p.id=cp.profile_id JOIN users u ON u.id=p.owner_user_id JOIN clubs c ON c.id=cp.club_id
     WHERE cp.club_id=$1 AND p.deleted_at IS NULL ORDER BY p.name`, [clubId]);
-  return result.rows.map((row) => ({ id: row.id, name: row.name, ...(row.color ? { color: row.color } : {}), ...(row.avatar ? { avatar: row.avatar } : {}), ownerUserId: row.owner_user_id, ownerUsername: row.owner_username, kind: row.kind, canManage: row.owner_user_id === userId || (administrator && row.kind === "guest") }));
+  return result.rows.map((row) => ({ id: row.id, name: row.name, ...(row.color ? { color: row.color } : {}), ...(row.avatar ? { avatar: row.avatar } : {}), hasCustomAvatar: row.avatar_override, ownerUserId: row.owner_user_id, ownerUsername: row.owner_username, kind: row.kind, canManage: row.owner_user_id === userId || (administrator && row.kind === "guest") }));
 }
 
 const clubRoutes: FastifyPluginAsync = async (app) => {
@@ -104,9 +107,25 @@ const clubRoutes: FastifyPluginAsync = async (app) => {
       profilesForClub(parsed.data.clubId, request.user.sub, admin),
     ]);
     const members: ClubMember[] = memberResult.rows.map((row) => ({ userId: row.user_id, username: row.username, ...(row.avatar ? { avatar: row.avatar } : {}), role: row.role, status: row.status, ...(row.joined_at ? { joinedAt: row.joined_at.toISOString() } : {}) }));
-    const availableProfiles: ClubProfile[] = availableResult.rows.map((row) => ({ id: row.id, name: row.name, ...(row.color ? { color: row.color } : {}), ...(row.avatar ? { avatar: row.avatar } : {}), ownerUserId: row.owner_user_id, ownerUsername: row.owner_username, kind: "personal", canManage: true }));
+    const availableProfiles: ClubProfile[] = availableResult.rows.map((row) => ({ id: row.id, name: row.name, ...(row.color ? { color: row.color } : {}), ...(row.avatar ? { avatar: row.avatar } : {}), hasCustomAvatar: false, ownerUserId: row.owner_user_id, ownerUsername: row.owner_username, kind: "personal", canManage: true }));
     const detail: ClubDetail = { club: { ...mapClub(clubRow), ...(admin ? { inviteCode: clubRow.invite_code } : {}) }, members, profiles, availableProfiles };
     return detail;
+  });
+
+  app.patch("/:clubId/avatar", { preHandler: app.authenticate }, async (request, reply) => {
+    const params = clubParams.safeParse(request.params); const body = avatarInput.safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ message: "Photo du club invalide ou trop volumineuse." });
+    const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access) return;
+    await pool.query("UPDATE clubs SET avatar=$1,updated_at=now() WHERE id=$2", [body.data.avatar, params.data.clubId]);
+    return { updated: true };
+  });
+
+  app.patch("/:clubId/profiles/:profileId/avatar", { preHandler: app.authenticate }, async (request, reply) => {
+    const params = profileParams.safeParse(request.params); const body = avatarInput.safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ message: "Photo du profil invalide ou trop volumineuse." });
+    const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access) return;
+    const result = await pool.query("UPDATE club_profiles SET avatar=$1 WHERE club_id=$2 AND profile_id=$3", [body.data.avatar, params.data.clubId, params.data.profileId]);
+    return result.rowCount ? { updated: true } : reply.code(404).send({ message: "Ce profil n’appartient pas au club." });
   });
 
   app.get("/:clubId/play-profiles", { preHandler: app.authenticate }, async (request, reply) => {
@@ -121,14 +140,14 @@ const clubRoutes: FastifyPluginAsync = async (app) => {
     if (!params.success || !query.success) return reply.code(400).send({ message: "Filtre statistique invalide." });
     const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access) return;
     const [clubResult, modeResult] = await Promise.all([
-      pool.query<{ id: string; name: string }>("SELECT id,name FROM clubs WHERE id=$1", [params.data.clubId]),
+      pool.query<{ id: string; name: string; avatar: string | null }>("SELECT id,name,avatar FROM clubs WHERE id=$1", [params.data.clubId]),
       pool.query<{ mode_key: string }>(`SELECT DISTINCT ${gameModeKeySql} mode_key FROM games g WHERE g.club_id=$1 AND g.status='completed' AND g.deleted_at IS NULL ORDER BY mode_key`, [params.data.clubId]),
     ]);
     const club = clubResult.rows[0]; if (!club) return reply.code(404).send({ message: "Club introuvable." });
     const modes: ClubGameMode[] = modeResult.rows.map((row) => ({ key: row.mode_key, label: gameModeLabel(row.mode_key) }));
     if (query.data.mode !== "all" && !modes.some((mode) => mode.key === query.data.mode)) return reply.code(400).send({ message: "Ce mode ne possède aucune partie dans le club." });
-    const statsResult = await pool.query<{ profile_id: string; name: string; owner_username: string; kind: "personal" | "guest"; games: string; wins: string; darts: string; turns: string; points: string; best_turn: number }>(`WITH club_players AS (
-      SELECT p.id profile_id,p.name,CASE WHEN p.guest_club_id IS NOT NULL THEN c.name ELSE u.username END owner_username,
+    const statsResult = await pool.query<{ profile_id: string; name: string; avatar: string | null; owner_username: string; kind: "personal" | "guest"; games: string; wins: string; darts: string; turns: string; points: string; best_turn: number }>(`WITH club_players AS (
+      SELECT p.id profile_id,p.name,COALESCE(cp.avatar,p.avatar) avatar,CASE WHEN p.guest_club_id IS NOT NULL THEN c.name ELSE u.username END owner_username,
         CASE WHEN p.guest_club_id IS NOT NULL THEN 'guest' ELSE 'personal' END kind
       FROM club_profiles cp JOIN profiles p ON p.id=cp.profile_id JOIN users u ON u.id=p.owner_user_id JOIN clubs c ON c.id=cp.club_id
       WHERE cp.club_id=$1 AND p.deleted_at IS NULL
@@ -136,18 +155,63 @@ const clubRoutes: FastifyPluginAsync = async (app) => {
       SELECT gp.*,g.state FROM games g JOIN game_participants gp ON gp.game_id=g.id
       WHERE g.club_id=$1 AND g.status='completed' AND g.deleted_at IS NULL AND ($2='all' OR ${gameModeKeySql}=$2)
     )
-    SELECT cp.profile_id,cp.name,cp.owner_username,cp.kind,COUNT(fp.game_id)::text games,
+    SELECT cp.profile_id,cp.name,cp.avatar,cp.owner_username,cp.kind,COUNT(fp.game_id)::text games,
       COUNT(fp.game_id) FILTER(WHERE fp.is_winner)::text wins,COALESCE(SUM(fp.darts_thrown),0)::text darts,
       COALESCE(SUM((SELECT COUNT(*) FROM jsonb_array_elements(COALESCE(fp.state->'turns','[]'::jsonb)) turn_data WHERE turn_data->>'playerId'=cp.profile_id)),0)::text turns,
       COALESCE(SUM(fp.points_scored),0)::text points,COALESCE(MAX(fp.best_turn),0) best_turn
     FROM club_players cp LEFT JOIN filtered_participations fp ON fp.profile_id=cp.profile_id
-    GROUP BY cp.profile_id,cp.name,cp.owner_username,cp.kind`, [params.data.clubId, query.data.mode]);
+    GROUP BY cp.profile_id,cp.name,cp.avatar,cp.owner_username,cp.kind`, [params.data.clubId, query.data.mode]);
     const leaderboard: ClubStatisticRow[] = statsResult.rows.map((row) => {
       const games = Number(row.games); const wins = Number(row.wins); const darts = Number(row.darts); const turns = Number(row.turns); const points = Number(row.points);
-      return { rank: 0, profileId: row.profile_id, name: row.name, ownerUsername: row.owner_username, kind: row.kind, games, wins, losses: games - wins, winRate: games ? wins / games * 100 : 0, dartsThrown: darts, turnsPlayed: turns, pointsScored: points, averagePerDart: darts ? points / darts : 0, averagePerTurn: turns ? points / turns : 0, bestTurn: row.best_turn };
+      return { rank: 0, profileId: row.profile_id, name: row.name, ...(row.avatar ? { avatar: row.avatar } : {}), ownerUsername: row.owner_username, kind: row.kind, games, wins, losses: games - wins, winRate: games ? wins / games * 100 : 0, dartsThrown: darts, turnsPlayed: turns, pointsScored: points, averagePerDart: darts ? points / darts : 0, averagePerTurn: turns ? points / turns : 0, bestTurn: row.best_turn };
     }).sort((a, b) => b.wins - a.wins || b.winRate - a.winRate || b.averagePerDart - a.averagePerDart || b.games - a.games || a.name.localeCompare(b.name, "fr")).map((row, index) => ({ ...row, rank: index + 1 }));
-    const response: ClubStatistics = { club, selectedMode: query.data.mode, modes, leaderboard };
+    const response: ClubStatistics = { club: { id: club.id, name: club.name, ...(club.avatar ? { avatar: club.avatar } : {}) }, selectedMode: query.data.mode, modes, leaderboard };
     return response;
+  });
+
+  app.get("/:clubId/messages", { preHandler: app.authenticate }, async (request, reply) => {
+    const params = clubParams.safeParse(request.params); if (!params.success) return reply.code(400).send({ message: "Club invalide." });
+    const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access) return;
+    const [clubResult, messageResult] = await Promise.all([
+      pool.query<{ id: string; name: string; avatar: string | null }>("SELECT id,name,avatar FROM clubs WHERE id=$1", [params.data.clubId]),
+      pool.query<{ id: string; club_id: string; author_user_id: string | null; author_username: string; author_avatar: string | null; content: string; created_at: Date; edited_at: Date | null }>(`SELECT * FROM (SELECT cm.id,cm.club_id,cm.author_user_id,cm.author_username,u.avatar author_avatar,cm.content,cm.created_at,cm.edited_at
+        FROM club_messages cm LEFT JOIN users u ON u.id=cm.author_user_id WHERE cm.club_id=$1 AND cm.deleted_at IS NULL ORDER BY cm.created_at DESC LIMIT 100) recent ORDER BY created_at`, [params.data.clubId]),
+    ]);
+    const club = clubResult.rows[0]; if (!club) return reply.code(404).send({ message: "Club introuvable." });
+    const messages: ClubMessage[] = messageResult.rows.map((row) => ({ id: row.id, clubId: row.club_id, ...(row.author_user_id ? { authorUserId: row.author_user_id } : {}), authorUsername: row.author_username, content: row.content, createdAt: row.created_at.toISOString(), ...(row.edited_at ? { editedAt: row.edited_at.toISOString() } : {}), canModify: row.author_user_id === request.user.sub }));
+    const authorAvatars = Object.fromEntries(messageResult.rows.flatMap((row) => row.author_user_id && row.author_avatar ? [[row.author_user_id, row.author_avatar]] : []));
+    const response: ClubChat = { club: { id: club.id, name: club.name, ...(club.avatar ? { avatar: club.avatar } : {}) }, messages, authorAvatars };
+    return response;
+  });
+
+  app.post("/:clubId/messages", { preHandler: app.authenticate, config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const params = clubParams.safeParse(request.params); const body = messageInput.safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ message: "Le message doit contenir entre 1 et 1 000 caractères." });
+    const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access) return;
+    const id = randomUUID();
+    const result = await pool.query("INSERT INTO club_messages(id,club_id,author_user_id,author_username,content) SELECT $1,$2,u.id,u.username,$3 FROM users u WHERE u.id=$4 RETURNING id", [id, params.data.clubId, body.data.content, request.user.sub]);
+    return result.rowCount ? reply.code(201).send({ id }) : reply.code(404).send({ message: "Compte introuvable." });
+  });
+
+  app.delete("/:clubId/messages/:messageId", { preHandler: app.authenticate }, async (request, reply) => {
+    const params = messageParams.safeParse(request.params); if (!params.success) return reply.code(400).send({ message: "Message invalide." });
+    const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access) return;
+    const message = await pool.query<{ author_user_id: string | null }>("SELECT author_user_id FROM club_messages WHERE id=$1 AND club_id=$2 AND deleted_at IS NULL", [params.data.messageId, params.data.clubId]);
+    const found = message.rows[0]; if (!found) return reply.code(404).send({ message: "Message introuvable." });
+    if (found.author_user_id !== request.user.sub) return reply.code(403).send({ message: "Tu ne peux pas supprimer ce message." });
+    await pool.query("UPDATE club_messages SET deleted_at=now() WHERE id=$1", [params.data.messageId]);
+    return reply.code(204).send();
+  });
+
+  app.patch("/:clubId/messages/:messageId", { preHandler: app.authenticate }, async (request, reply) => {
+    const params = messageParams.safeParse(request.params); const body = messageInput.safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ message: "Le message doit contenir entre 1 et 1 000 caractères." });
+    const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access) return;
+    const message = await pool.query<{ author_user_id: string | null }>("SELECT author_user_id FROM club_messages WHERE id=$1 AND club_id=$2 AND deleted_at IS NULL", [params.data.messageId, params.data.clubId]);
+    const found = message.rows[0]; if (!found) return reply.code(404).send({ message: "Message introuvable." });
+    if (found.author_user_id !== request.user.sub) return reply.code(403).send({ message: "Tu ne peux pas modifier ce message." });
+    const updated = await pool.query<{ edited_at: Date }>("UPDATE club_messages SET content=$1,edited_at=now() WHERE id=$2 RETURNING edited_at", [body.data.content, params.data.messageId]);
+    return { updated: true, editedAt: updated.rows[0]?.edited_at.toISOString() };
   });
 
   app.patch("/:clubId", { preHandler: app.authenticate }, async (request, reply) => {

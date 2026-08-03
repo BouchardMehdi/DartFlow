@@ -106,6 +106,7 @@ export type ClubMembershipStatus = "pending" | "active" | "former";
 export interface ClubSummary {
   id: string;
   name: string;
+  avatar?: string;
   slug: string;
   description: string;
   visibility: "private" | "public";
@@ -130,6 +131,7 @@ export interface ClubProfile {
   name: string;
   color?: string;
   avatar?: string;
+  hasCustomAvatar: boolean;
   ownerUserId: string;
   ownerUsername: string;
   kind: "personal" | "guest";
@@ -140,6 +142,7 @@ export interface ClubStatisticRow {
   rank: number;
   profileId: string;
   name: string;
+  avatar?: string;
   ownerUsername: string;
   kind: "personal" | "guest";
   games: number;
@@ -160,7 +163,7 @@ export interface ClubGameMode {
 }
 
 export interface ClubStatistics {
-  club: { id: string; name: string };
+  club: { id: string; name: string; avatar?: string };
   selectedMode: string;
   modes: ClubGameMode[];
   leaderboard: ClubStatisticRow[];
@@ -171,4 +174,21 @@ export interface ClubDetail {
   members: ClubMember[];
   profiles: ClubProfile[];
   availableProfiles: ClubProfile[];
+}
+
+export interface ClubMessage {
+  id: string;
+  clubId: string;
+  authorUserId?: string;
+  authorUsername: string;
+  content: string;
+  createdAt: string;
+  editedAt?: string;
+  canModify: boolean;
+}
+
+export interface ClubChat {
+  club: { id: string; name: string; avatar?: string };
+  messages: ClubMessage[];
+  authorAvatars: Record<string, string>;
 }

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS clubs (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE clubs ADD COLUMN IF NOT EXISTS avatar text;
 
 CREATE TABLE IF NOT EXISTS club_members (
   club_id text NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
@@ -73,6 +74,20 @@ CREATE TABLE IF NOT EXISTS club_profiles (
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY(club_id,profile_id)
 );
+ALTER TABLE club_profiles ADD COLUMN IF NOT EXISTS avatar text;
+
+CREATE TABLE IF NOT EXISTS club_messages (
+  id text PRIMARY KEY,
+  club_id text NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+  author_user_id text REFERENCES users(id) ON DELETE SET NULL,
+  author_username varchar(24) NOT NULL,
+  content varchar(1000) NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  edited_at timestamptz,
+  deleted_at timestamptz
+);
+ALTER TABLE club_messages ADD COLUMN IF NOT EXISTS edited_at timestamptz;
+CREATE INDEX IF NOT EXISTS club_messages_club_created_idx ON club_messages(club_id,created_at DESC) WHERE deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS profile_access (
   profile_id text NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
