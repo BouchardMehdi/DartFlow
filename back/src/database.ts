@@ -2,7 +2,15 @@ import pg from "pg";
 import { config } from "./config.js";
 
 const { Pool } = pg;
-export const pool = new Pool({ connectionString: config.DATABASE_URL });
+export const pool = new Pool(config.DATABASE_URL
+  ? { connectionString: config.DATABASE_URL }
+  : {
+      host: config.POSTGRES_HOST,
+      port: config.POSTGRES_PORT,
+      database: config.POSTGRES_DB,
+      user: config.POSTGRES_USER,
+      password: config.POSTGRES_PASSWORD,
+    });
 
 const migration = `
 CREATE TABLE IF NOT EXISTS users (

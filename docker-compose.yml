@@ -1,3 +1,5 @@
+name: dartflow
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -5,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-dartflow}
       POSTGRES_USER: ${POSTGRES_USER:-dartflow}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dartflow-local}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the .env file}
     volumes:
       - dartflow-postgres:/var/lib/postgresql/data
     healthcheck:
@@ -13,6 +15,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+    networks:
+      - database
 
   back:
     build:
@@ -21,23 +25,32 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      HOST: 0.0.0.0
       PORT: 4000
-      DATABASE_URL: postgres://${POSTGRES_USER:-dartflow}:${POSTGRES_PASSWORD:-dartflow-local}@postgres:5432/${POSTGRES_DB:-dartflow}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-dartflow}
+      POSTGRES_USER: ${POSTGRES_USER:-dartflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the .env file}
       JWT_SECRET: ${JWT_SECRET:?Définissez JWT_SECRET dans le fichier .env}
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in the .env file}
       ACCESS_TOKEN_TTL_HOURS: ${ACCESS_TOKEN_TTL_HOURS:-4}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-30}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
     ports:
-      - "${BACK_PORT:-4000}:4000"
+      - "127.0.0.1:${BACK_PORT:-3008}:4000"
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - app
+      - database
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/health"]
       interval: 10s
       timeout: 3s
       retries: 10
+      start_period: 10s
 
   front:
     build:
@@ -50,10 +63,23 @@ services:
     environment:
       BACKEND_INTERNAL_URL: http://back:4000
     ports:
-      - "${FRONT_PORT:-3000}:3000"
+      - "127.0.0.1:${FRONT_PORT:-8088}:3000"
     depends_on:
       back:
         condition: service_healthy
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
 volumes:
   dartflow-postgres:
+
+networks:
+  app:
+  database:
+    internal: true

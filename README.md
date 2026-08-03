@@ -30,9 +30,11 @@ Créez `.env` à partir de `.env.example`, remplacez au minimum les mots de pass
 docker compose up --build -d
 ```
 
-L’application est exposée sur `http://localhost:3000`. PostgreSQL reste interne au réseau Docker et ses données sont conservées dans le volume `dartflow-postgres`.
+Par défaut, l’application est exposée uniquement sur `http://127.0.0.1:8088` et l’API sur `http://127.0.0.1:3008`. PostgreSQL reste interne au réseau Docker et ses données sont conservées dans le volume Docker du projet.
 
-En production, placez l’application derrière un reverse proxy HTTPS, définissez `FRONTEND_ORIGIN` avec l’URL publique exacte et passez `COOKIE_SECURE=true`. La valeur `false` de l’exemple sert uniquement au Docker local en HTTP. HTTPS est nécessaire pour l’installation PWA hors localhost et protège les cookies de session.
+En production, placez l’application derrière un reverse proxy HTTPS, définissez `FRONTEND_ORIGIN` avec l’URL publique exacte et gardez `COOKIE_SECURE=true`. Pour un test Docker local en HTTP, utilisez temporairement `FRONTEND_ORIGIN=http://localhost:3000` et `COOKIE_SECURE=false` dans votre `.env`. HTTPS est nécessaire pour l’installation PWA hors localhost et protège les cookies de session.
+
+La procédure VPS complète pour `dartflow.bouchard-mehdi.fr` (DNS, `.env`, Nginx, Certbot, sauvegardes et mises à jour) se trouve dans [deploy.md](deploy.md).
 
 ## Synchronisation
 
