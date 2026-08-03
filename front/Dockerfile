@@ -9,7 +9,9 @@ COPY shared shared
 RUN npm run build --workspace @dartflow/shared
 COPY front front
 ARG BACKEND_INTERNAL_URL=http://back:4000
+ARG NEXT_PUBLIC_REALTIME_URL
 ENV BACKEND_INTERNAL_URL=$BACKEND_INTERNAL_URL
+ENV NEXT_PUBLIC_REALTIME_URL=$NEXT_PUBLIC_REALTIME_URL
 RUN npm run build --workspace @dartflow/front
 
 FROM node:22-alpine AS runtime

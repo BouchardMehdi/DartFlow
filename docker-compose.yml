@@ -28,6 +28,8 @@ services:
       ACCESS_TOKEN_TTL_HOURS: ${ACCESS_TOKEN_TTL_HOURS:-4}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-30}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    ports:
+      - "${BACK_PORT:-4000}:4000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,6 +45,7 @@ services:
       dockerfile: front/Dockerfile
       args:
         BACKEND_INTERNAL_URL: http://back:4000
+        NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-}
     restart: unless-stopped
     environment:
       BACKEND_INTERNAL_URL: http://back:4000

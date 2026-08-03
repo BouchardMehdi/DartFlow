@@ -21,19 +21,21 @@ export function ClubStatisticsScreen({ clubId }: { clubId: string }) {
   const [data, setData] = useState<ClubStatistics | null>(null);
   const [mode, setMode] = useState("all");
   const [selectedId, setSelectedId] = useState("");
+  const [compareId, setCompareId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
     void apiRequest<ClubStatistics>(`/clubs/${clubId}/statistics?mode=${encodeURIComponent(mode)}`)
-      .then((result) => { if (active) { setData(result); setSelectedId((current) => result.leaderboard.some((row) => row.profileId === current) ? current : result.leaderboard[0]?.profileId ?? ""); } })
+      .then((result) => { if (active) { setData(result); setSelectedId((current) => result.leaderboard.some((row) => row.profileId === current) ? current : result.leaderboard[0]?.profileId ?? ""); setCompareId((current)=>result.leaderboard.some(row=>row.profileId===current)?current:result.leaderboard[1]?.profileId??""); } })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "Statistiques indisponibles."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [clubId, mode]);
 
   const selected = data?.leaderboard.find((row) => row.profileId === selectedId) ?? data?.leaderboard[0];
+  const compared = data?.leaderboard.find((row) => row.profileId === compareId);
   const modeOptions = useMemo(() => [{ value: "all", label: "Tous les modes" }, ...(data?.modes.map((item) => ({ value: item.key, label: item.label })) ?? [])], [data?.modes]);
   const selectedModeLabel = modeOptions.find((option) => option.value === mode)?.label ?? "Tous les modes";
   const changeMode = (value: string) => { setLoading(true); setError(""); setMode(value); };
@@ -87,8 +89,18 @@ export function ClubStatisticsScreen({ clubId }: { clubId: string }) {
             <Metric label="Meilleur tour" value={selected.bestTurn} />
             <Metric label="Moy. / tour" value={selected.averagePerTurn.toFixed(1)} />
             <Metric label="Moy. / flèche" value={selected.averagePerDart.toFixed(1)} />
+            <Metric label="100+" value={selected.scores100Plus} />
+            <Metric label="140+" value={selected.scores140Plus} />
+            <Metric label="180" value={selected.scores180} />
+            <Metric label="Doubles touchés" value={selected.doublesHit} />
+            <Metric label="Triples touchés" value={selected.triplesHit} />
+            <Metric label="Bulls touchés" value={selected.bullsHit} />
+            <Metric label="Meilleur checkout" value={selected.highestCheckout||"—"} />
+            <Metric label="Secteur favori" value={selected.favoriteSector??"—"} />
           </dl>
+          {selected.recentForm.length>0&&<div className="mt-6 border-t border-[var(--line)] pt-5"><h3 className="font-black">Forme récente</h3><p className="mt-1 text-sm text-[var(--muted)]">Moyenne par fléchette sur les dix dernières parties.</p><div className="mt-4 flex h-28 items-end gap-2">{selected.recentForm.map((point,index)=><div key={`${point.date}-${index}`} className="group flex min-w-0 flex-1 flex-col items-center justify-end"><span className="mb-1 text-[9px] font-bold opacity-0 group-hover:opacity-100">{point.averagePerDart.toFixed(1)}</span><span className="w-full rounded-t bg-[var(--lime)]" style={{height:`${Math.max(6,Math.min(100,point.averagePerDart/60*100))}%`}} title={`${new Date(point.date).toLocaleDateString("fr-FR")} · ${point.averagePerDart.toFixed(1)}`}/></div>)}</div></div>}
         </section>}
+        {selected&&data.leaderboard.length>1&&<section className="mt-8 rounded-[1.8rem] border border-[var(--line)] bg-[var(--panel)] p-5 sm:p-6"><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.15em] text-[var(--lime)]">Face-à-face</p><h2 className="mt-1 text-2xl font-black">Comparer deux profils</h2></div><div className="w-full sm:w-64"><SelectField compact value={compareId} ariaLabel="Profil à comparer" options={data.leaderboard.filter(row=>row.profileId!==selected.profileId).map(row=>({value:row.profileId,label:row.name}))} onChange={setCompareId}/></div></div>{compared&&<div className="mt-5 overflow-hidden rounded-2xl border border-[var(--line)]"><div className="grid grid-cols-[1fr_5rem_5rem] gap-2 bg-black/20 px-4 py-3 text-sm font-black"><span>Indicateur</span><span className="truncate text-right">{selected.name}</span><span className="truncate text-right">{compared.name}</span></div>{[["Victoires",selected.wins,compared.wins],["Taux",`${selected.winRate.toFixed(0)} %`,`${compared.winRate.toFixed(0)} %`],["Moy./flèche",selected.averagePerDart.toFixed(1),compared.averagePerDart.toFixed(1)],["Meilleur tour",selected.bestTurn,compared.bestTurn],["180",selected.scores180,compared.scores180],["Checkout",selected.highestCheckout,compared.highestCheckout]].map(([label,left,right])=><div key={String(label)} className="grid grid-cols-[1fr_5rem_5rem] gap-2 border-t border-[var(--line)] px-4 py-3 text-sm"><span className="text-[var(--muted)]">{label}</span><strong className="text-right">{left}</strong><strong className="text-right">{right}</strong></div>)}</div>}</section>}
       </>}
     </main>
   );

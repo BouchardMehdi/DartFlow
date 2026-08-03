@@ -101,7 +101,7 @@ export interface LeaderboardRow {
 }
 
 export type ClubRole = "owner" | "admin" | "member";
-export type ClubMembershipStatus = "pending" | "active" | "former";
+export type ClubMembershipStatus = "pending" | "active" | "suspended" | "former";
 
 export interface ClubSummary {
   id: string;
@@ -124,6 +124,7 @@ export interface ClubMember {
   role: ClubRole;
   status: ClubMembershipStatus;
   joinedAt?: string;
+  suspendedUntil?: string;
 }
 
 export interface ClubProfile {
@@ -155,6 +156,15 @@ export interface ClubStatisticRow {
   averagePerDart: number;
   averagePerTurn: number;
   bestTurn: number;
+  scores100Plus: number;
+  scores140Plus: number;
+  scores180: number;
+  doublesHit: number;
+  triplesHit: number;
+  bullsHit: number;
+  highestCheckout: number;
+  favoriteSector?: number;
+  recentForm: Array<{ date: string; averagePerDart: number }>;
 }
 
 export interface ClubGameMode {
@@ -185,6 +195,8 @@ export interface ClubMessage {
   createdAt: string;
   editedAt?: string;
   canModify: boolean;
+  replyTo?: { id: string; authorUsername: string; content: string };
+  reactions: Array<{ emoji: string; count: number; reactedByMe: boolean }>;
 }
 
 export interface ClubChat {
@@ -192,3 +204,84 @@ export interface ClubChat {
   messages: ClubMessage[];
   authorAvatars: Record<string, string>;
 }
+
+export type ClubRoomStatus = "waiting" | "playing" | "completed" | "cancelled";
+
+export interface ClubRoom {
+  id: string;
+  clubId: string;
+  clubName: string;
+  name: string;
+  status: ClubRoomStatus;
+  hostUserId: string;
+  hostUsername: string;
+  scorerUserId: string;
+  scorerUsername: string;
+  gameState?: unknown;
+  gameVersion: number;
+  viewerCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TournamentFormat = "knockout" | "round-robin";
+export type TournamentStatus = "draft" | "active" | "completed" | "cancelled";
+
+export interface ClubTournamentEntry {
+  profileId: string;
+  name: string;
+  avatar?: string;
+  seed: number;
+  played: number;
+  wins: number;
+  losses: number;
+  points: number;
+}
+
+export interface ClubTournamentMatch {
+  id: string;
+  round: number;
+  position: number;
+  profileA?: { id: string; name: string; avatar?: string };
+  profileB?: { id: string; name: string; avatar?: string };
+  winnerProfileId?: string;
+  status: "scheduled" | "completed";
+  roomId?: string;
+}
+
+export interface ClubTournament {
+  id: string;
+  clubId: string;
+  name: string;
+  format: TournamentFormat;
+  modeKey: string;
+  status: TournamentStatus;
+  createdByUsername: string;
+  entries: ClubTournamentEntry[];
+  matches: ClubTournamentMatch[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  type: "club" | "chat" | "room" | "tournament";
+  title: string;
+  body: string;
+  href?: string;
+  readAt?: string;
+  createdAt: string;
+}
+
+export interface NotificationsResponse {
+  notifications: NotificationItem[];
+  unreadCount: number;
+}
+
+export type RealtimeEvent =
+  | { type: "chat.changed"; clubId: string }
+  | { type: "chat.typing"; clubId: string; userId: string; username: string; typing: boolean }
+  | { type: "room.changed"; clubId: string; roomId: string }
+  | { type: "tournament.changed"; clubId: string; tournamentId: string }
+  | { type: "club.changed"; clubId: string }
+  | { type: "notification.created"; notification: NotificationItem };

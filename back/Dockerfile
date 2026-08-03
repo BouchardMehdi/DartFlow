@@ -14,6 +14,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/package.json /app/package-lock.json ./
 COPY --from=build /app/node_modules node_modules
+COPY --from=build /app/back/node_modules back/node_modules
 COPY --from=build /app/back/dist back/dist
 COPY --from=build /app/back/package.json back/package.json
 COPY --from=build /app/shared shared

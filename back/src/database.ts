@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS username text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS recovery_code_hash text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS recovery_code_created_at timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version integer NOT NULL DEFAULT 1;
 UPDATE users SET username = 'joueur_' || substring(replace(id, '-', ''), 1, 12) WHERE username IS NULL;
 ALTER TABLE users ALTER COLUMN username SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique ON users(lower(username));
@@ -42,6 +45,9 @@ CREATE TABLE IF NOT EXISTS club_members (
   left_at timestamptz,
   PRIMARY KEY(club_id,user_id)
 );
+ALTER TABLE club_members DROP CONSTRAINT IF EXISTS club_members_status_check;
+ALTER TABLE club_members ADD CONSTRAINT club_members_status_check CHECK(status IN ('pending','active','suspended','former'));
+ALTER TABLE club_members ADD COLUMN IF NOT EXISTS suspended_until timestamptz;
 CREATE INDEX IF NOT EXISTS club_members_user_idx ON club_members(user_id,status);
 
 CREATE TABLE IF NOT EXISTS profiles (
@@ -87,7 +93,89 @@ CREATE TABLE IF NOT EXISTS club_messages (
   deleted_at timestamptz
 );
 ALTER TABLE club_messages ADD COLUMN IF NOT EXISTS edited_at timestamptz;
+ALTER TABLE club_messages ADD COLUMN IF NOT EXISTS reply_to_message_id text;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'club_messages_reply_fk') THEN
+    ALTER TABLE club_messages ADD CONSTRAINT club_messages_reply_fk FOREIGN KEY(reply_to_message_id) REFERENCES club_messages(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS club_messages_club_created_idx ON club_messages(club_id,created_at DESC) WHERE deleted_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS club_message_reactions (
+  message_id text NOT NULL REFERENCES club_messages(id) ON DELETE CASCADE,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  emoji varchar(16) NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(message_id,user_id,emoji)
+);
+
+CREATE TABLE IF NOT EXISTS club_rooms (
+  id text PRIMARY KEY,
+  club_id text NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+  host_user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  scorer_user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name varchar(80) NOT NULL,
+  status text NOT NULL DEFAULT 'waiting' CHECK(status IN ('waiting','playing','completed','cancelled')),
+  game_state jsonb,
+  game_version integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS club_rooms_club_idx ON club_rooms(club_id,status,updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS club_room_viewers (
+  room_id text NOT NULL REFERENCES club_rooms(id) ON DELETE CASCADE,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  last_seen_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(room_id,user_id)
+);
+
+CREATE TABLE IF NOT EXISTS club_tournaments (
+  id text PRIMARY KEY,
+  club_id text NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+  created_by text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name varchar(80) NOT NULL,
+  format text NOT NULL CHECK(format IN ('knockout','round-robin')),
+  mode_key varchar(60) NOT NULL,
+  status text NOT NULL DEFAULT 'active' CHECK(status IN ('draft','active','completed','cancelled')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS club_tournament_entries (
+  tournament_id text NOT NULL REFERENCES club_tournaments(id) ON DELETE CASCADE,
+  profile_id text NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  seed integer NOT NULL,
+  PRIMARY KEY(tournament_id,profile_id),
+  UNIQUE(tournament_id,seed)
+);
+
+CREATE TABLE IF NOT EXISTS club_tournament_matches (
+  id text PRIMARY KEY,
+  tournament_id text NOT NULL REFERENCES club_tournaments(id) ON DELETE CASCADE,
+  round integer NOT NULL,
+  position integer NOT NULL,
+  profile_a_id text REFERENCES profiles(id) ON DELETE SET NULL,
+  profile_b_id text REFERENCES profiles(id) ON DELETE SET NULL,
+  winner_profile_id text REFERENCES profiles(id) ON DELETE SET NULL,
+  status text NOT NULL DEFAULT 'scheduled' CHECK(status IN ('scheduled','completed')),
+  room_id text REFERENCES club_rooms(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(tournament_id,round,position)
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id text PRIMARY KEY,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type text NOT NULL CHECK(type IN ('club','chat','room','tournament')),
+  title varchar(120) NOT NULL,
+  body varchar(300) NOT NULL,
+  href varchar(300),
+  read_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications(user_id,created_at DESC);
 
 CREATE TABLE IF NOT EXISTS profile_access (
   profile_id text NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,

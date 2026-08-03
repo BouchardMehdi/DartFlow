@@ -14,7 +14,18 @@ test("crée un club, un profil invité et prépare une partie du club", async ({
   await page.getByLabel("Adresse email").fill(`${username}@example.test`);
   await page.getByLabel("Mot de passe").fill("Test-DartFlow-42!");
   await page.getByRole("button", { name: "Créer mon compte" }).click();
+  await page.getByRole("button", { name: "J’ai sauvegardé mon code" }).click();
   await expect(page.getByRole("heading", { name: `@${username}` })).toBeVisible();
+  const realtimeReady = await page.evaluate(() => new Promise<boolean>((resolve) => {
+      const socket = new WebSocket(`ws://${window.location.hostname}:4000/realtime`);
+      const timeout = window.setTimeout(() => { socket.close(); resolve(false); }, 4_000);
+      socket.addEventListener("message", (event) => {
+        if ((JSON.parse(String(event.data)) as { type?: string }).type !== "ready") return;
+        window.clearTimeout(timeout); socket.close(); resolve(true);
+      });
+      socket.addEventListener("error", () => { window.clearTimeout(timeout); resolve(false); });
+    }));
+  expect(realtimeReady).toBe(true);
 
   await page.getByRole("button", { name: "Ouvrir le menu" }).click();
   await page
@@ -44,6 +55,12 @@ test("crée un club, un profil invité et prépare une partie du club", async ({
   await page.getByLabel("Choisir la photo de Joueur invité").setInputFiles(avatar);
   await expect(page.getByText("Photo du profil mise à jour.")).toBeVisible();
   await expect(page.getByAltText("Photo de Joueur invité")).toBeVisible();
+  await page.getByPlaceholder("Pseudo de l’invité").fill("Deuxième joueur");
+  await page.getByRole("button", { name: "Créer", exact: true }).click();
+  await expect(page.getByText("Deuxième joueur", { exact: true })).toBeVisible();
+  await page.getByPlaceholder("Pseudo de l’invité").fill("Troisième joueur");
+  await page.getByRole("button", { name: "Créer", exact: true }).click();
+  await expect(page.getByText("Troisième joueur", { exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Ouvrir le chat du club" }).click();
   await expect(page).toHaveURL(/\/clubs\/[^/]+\/chat$/);
@@ -75,6 +92,31 @@ test("crée un club, un profil invité et prépare une partie du club", async ({
   await expect(page.getByText("Commence la conversation")).toBeVisible();
   await page.getByRole("link", { name: "Retour", exact: true }).click();
 
+  await page.getByRole("link", { name: /Salons en direct/ }).click();
+  await expect(page.getByRole("heading", { name: "Salons en direct" })).toBeVisible();
+  await page.getByLabel("Nom").fill("Finale du vendredi");
+  await page.getByRole("button", { name: "Créer le salon" }).click();
+  await expect(page).toHaveURL(/\/clubs\/[^/]+\/live\/[^/]+$/);
+  await expect(page.getByRole("heading", { name: "Finale du vendredi" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Configurer la partie" })).toBeVisible();
+  await page.getByRole("link", { name: "Salons en direct" }).click();
+  await page.getByRole("link", { name: "Retour au club" }).click();
+
+  await page.getByRole("link", { name: /Tournois et championnats/ }).click();
+  await expect(page.getByRole("heading", { name: "Tournois et championnats" })).toBeVisible();
+  await page.getByLabel("Nom").fill("Championnat E2E");
+  await page.getByLabel("Format du tournoi").click();
+  await page.getByRole("option", { name: "Élimination directe" }).click();
+  await page.getByRole("button", { name: "Créer", exact: true }).click();
+  await expect(page).toHaveURL(/\/clubs\/[^/]+\/tournaments\/[^/]+$/);
+  await expect(page.getByRole("heading", { name: "Championnat E2E" })).toBeVisible();
+  await expect(page.getByText("Joueur invité", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Deuxième joueur", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Troisième joueur", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("En cours", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Toutes les compétitions" }).click();
+  await page.getByRole("link", { name: "Retour au club" }).click();
+
   await page.getByRole("link", { name: "Voir le classement et les statistiques du club" }).click();
   await expect(page).toHaveURL(/\/clubs\/[^/]+\/stats$/);
   await expect(page.getByRole("heading", { name: "Tous les joueurs" })).toBeVisible();
@@ -86,5 +128,6 @@ test("crée un club, un profil invité et prépare une partie du club", async ({
   await expect(page).toHaveURL(/\/new-game\?club=/);
   await expect(page.getByText("Partie du club")).toBeVisible();
   await expect(page.getByText(clubName, { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Profil du joueur 1")).toContainText("Joueur invité");
+  await expect(page.getByLabel("Profil du joueur 1")).toContainText("Deuxième joueur");
+  await expect(page.getByLabel("Profil du joueur 2")).toContainText("Joueur invité");
 });

@@ -4,6 +4,8 @@ import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
 import { pool } from "../database.js";
 import { normalizeName } from "../domain.js";
+import { createNotification, notifyClubMembers } from "../notifications.js";
+import { publishToClub } from "../realtime.js";
 
 const clubParams = z.object({ clubId: z.string().min(1).max(100) });
 const statisticsQuery = z.object({ mode: z.string().max(60).regex(/^[a-z0-9-]+$/).default("all") });
@@ -15,6 +17,8 @@ const clubUpdateInput = z.object({ name: z.string().trim().min(2).max(60).option
 const guestInput = z.object({ name: z.string().trim().min(1).max(30), color: z.string().max(100).optional() });
 const avatarInput = z.object({ avatar: z.string().max(750_000).regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/).nullable() });
 const messageInput = z.object({ content: z.string().trim().min(1).max(1000) });
+const messageCreateInput = messageInput.extend({ replyToMessageId: z.string().uuid().optional() });
+const reactionInput = z.object({ emoji: z.enum(["👍", "❤️", "😂", "🎯", "🔥"]) });
 const code = () => randomBytes(6).toString("hex").toUpperCase();
 const slugBase = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 55) || "club";
 const gameModeKeySql = `CASE
@@ -27,8 +31,9 @@ const gameModeLabel = (key: string): string => {
   return labels[key] ?? key;
 };
 
-interface Membership { role: "owner" | "admin" | "member"; status: "pending" | "active" | "former" }
+interface Membership { role: "owner" | "admin" | "member"; status: "pending" | "active" | "suspended" | "former" }
 async function membership(userId: string, clubId: string): Promise<Membership | null> {
+  await pool.query("UPDATE club_members SET status='active',suspended_until=NULL WHERE club_id=$1 AND user_id=$2 AND status='suspended' AND suspended_until<=now()", [clubId, userId]);
   const result = await pool.query<Membership>("SELECT role,status FROM club_members WHERE club_id=$1 AND user_id=$2", [clubId, userId]);
   return result.rows[0] ?? null;
 }
@@ -56,10 +61,10 @@ const clubRoutes: FastifyPluginAsync = async (app) => {
     const clubs = await pool.query<ClubRow>(`SELECT c.*,cm.role,cm.status membership_status,
       (SELECT COUNT(*) FROM club_members m WHERE m.club_id=c.id AND m.status='active')::text member_count,
       (SELECT COUNT(*) FROM club_profiles cp WHERE cp.club_id=c.id)::text profile_count
-      FROM clubs c JOIN club_members cm ON cm.club_id=c.id AND cm.user_id=$1 WHERE cm.status IN ('active','pending') ORDER BY c.updated_at DESC`, [request.user.sub]);
+      FROM clubs c JOIN club_members cm ON cm.club_id=c.id AND cm.user_id=$1 WHERE cm.status IN ('active','pending','suspended') ORDER BY c.updated_at DESC`, [request.user.sub]);
     const discover = await pool.query<ClubRow>(`SELECT c.*,(SELECT COUNT(*) FROM club_members m WHERE m.club_id=c.id AND m.status='active')::text member_count,
       (SELECT COUNT(*) FROM club_profiles cp WHERE cp.club_id=c.id)::text profile_count
-      FROM clubs c WHERE c.visibility='public' AND NOT EXISTS(SELECT 1 FROM club_members cm WHERE cm.club_id=c.id AND cm.user_id=$1 AND cm.status IN ('active','pending')) ORDER BY member_count DESC,c.name LIMIT 30`, [request.user.sub]);
+      FROM clubs c WHERE c.visibility='public' AND NOT EXISTS(SELECT 1 FROM club_members cm WHERE cm.club_id=c.id AND cm.user_id=$1 AND cm.status IN ('active','pending','suspended')) ORDER BY member_count DESC,c.name LIMIT 30`, [request.user.sub]);
     return { clubs: clubs.rows.map(mapClub), discover: discover.rows.map(mapClub) };
   });
 
@@ -78,8 +83,14 @@ const clubRoutes: FastifyPluginAsync = async (app) => {
     const parsed = z.object({ code: z.string().trim().min(6).max(32) }).safeParse(request.body); if (!parsed.success) return reply.code(400).send({ message: "Code invalide." });
     const club = await pool.query<{ id: string }>("SELECT id FROM clubs WHERE upper(invite_code)=upper($1)", [parsed.data.code]); const clubId = club.rows[0]?.id;
     if (!clubId) return reply.code(404).send({ message: "Ce code d’invitation n’existe pas." });
+    await pool.query("UPDATE club_members SET status='active',suspended_until=NULL WHERE club_id=$1 AND user_id=$2 AND status='suspended' AND suspended_until<=now()", [clubId, request.user.sub]);
+    const existing = await pool.query<{ status: Membership["status"] }>("SELECT status FROM club_members WHERE club_id=$1 AND user_id=$2", [clubId, request.user.sub]);
+    if (existing.rows[0]?.status === "suspended") return reply.code(403).send({ message: "Ton accès à ce club est actuellement suspendu." });
     await pool.query(`INSERT INTO club_members(club_id,user_id,role,status,joined_at) VALUES($1,$2,'member','active',now())
       ON CONFLICT(club_id,user_id) DO UPDATE SET role=CASE WHEN club_members.status='active' THEN club_members.role ELSE 'member' END,status='active',joined_at=COALESCE(club_members.joined_at,now()),left_at=NULL`, [clubId, request.user.sub]);
+    const admins = await pool.query<{ user_id: string }>("SELECT user_id FROM club_members WHERE club_id=$1 AND role IN ('owner','admin') AND status='active' AND user_id<>$2", [clubId, request.user.sub]);
+    await Promise.all(admins.rows.map((row) => createNotification({ userId: row.user_id, type: "club", title: "Nouveau membre", body: `@${request.user.username} a rejoint le club avec une invitation.`, href: `/clubs/${clubId}` })));
+    await publishToClub(clubId, { type: "club.changed", clubId });
     return { clubId };
   });
 
@@ -87,8 +98,14 @@ const clubRoutes: FastifyPluginAsync = async (app) => {
     const parsed = clubParams.safeParse(request.params); if (!parsed.success) return reply.code(400).send({ message: "Club invalide." });
     const club = await pool.query<{ visibility: string }>("SELECT visibility FROM clubs WHERE id=$1", [parsed.data.clubId]);
     if (club.rows[0]?.visibility !== "public") return reply.code(403).send({ message: "Ce club est accessible uniquement sur invitation." });
+    await pool.query("UPDATE club_members SET status='active',suspended_until=NULL WHERE club_id=$1 AND user_id=$2 AND status='suspended' AND suspended_until<=now()", [parsed.data.clubId, request.user.sub]);
+    const existing = await pool.query<{ status: Membership["status"] }>("SELECT status FROM club_members WHERE club_id=$1 AND user_id=$2", [parsed.data.clubId, request.user.sub]);
+    if (existing.rows[0]?.status === "suspended") return reply.code(403).send({ message: "Ton accès à ce club est actuellement suspendu." });
     await pool.query(`INSERT INTO club_members(club_id,user_id,role,status) VALUES($1,$2,'member','pending')
       ON CONFLICT(club_id,user_id) DO UPDATE SET status=CASE WHEN club_members.status='former' THEN 'pending' ELSE club_members.status END,left_at=NULL`, [parsed.data.clubId, request.user.sub]);
+    const admins = await pool.query<{ user_id: string }>("SELECT user_id FROM club_members WHERE club_id=$1 AND role IN ('owner','admin') AND status='active'", [parsed.data.clubId]);
+    await Promise.all(admins.rows.map((row) => createNotification({ userId: row.user_id, type: "club", title: "Nouvelle demande d’adhésion", body: `@${request.user.username} souhaite rejoindre le club.`, href: `/clubs/${parsed.data.clubId}` })));
+    await publishToClub(parsed.data.clubId, { type: "club.changed", clubId: parsed.data.clubId });
     return reply.code(202).send({ status: "pending" });
   });
 
@@ -102,11 +119,11 @@ const clubRoutes: FastifyPluginAsync = async (app) => {
       FROM clubs c JOIN club_members cm ON cm.club_id=c.id AND cm.user_id=$2 WHERE c.id=$1`, [parsed.data.clubId, request.user.sub]);
     const clubRow = clubResult.rows[0]; if (!clubRow) return reply.code(404).send({ message: "Club introuvable." });
     const [memberResult, availableResult, profiles] = await Promise.all([
-      pool.query<{ user_id: string; username: string; avatar: string | null; role: ClubMember["role"]; status: ClubMember["status"]; joined_at: Date | null }>(`SELECT cm.user_id,u.username,u.avatar,cm.role,cm.status,cm.joined_at FROM club_members cm JOIN users u ON u.id=cm.user_id WHERE cm.club_id=$1 AND cm.status IN ('active','pending') ORDER BY cm.status,cm.role,u.username`, [parsed.data.clubId]),
+      pool.query<{ user_id: string; username: string; avatar: string | null; role: ClubMember["role"]; status: ClubMember["status"]; joined_at: Date | null; suspended_until: Date | null }>(`SELECT cm.user_id,u.username,u.avatar,cm.role,cm.status,cm.joined_at,cm.suspended_until FROM club_members cm JOIN users u ON u.id=cm.user_id WHERE cm.club_id=$1 AND cm.status IN ('active','pending','suspended') ORDER BY cm.status,cm.role,u.username`, [parsed.data.clubId]),
       pool.query<{ id: string; name: string; color: string | null; avatar: string | null; owner_user_id: string; owner_username: string }>(`SELECT p.id,p.name,p.color,p.avatar,p.owner_user_id,u.username owner_username FROM profiles p JOIN users u ON u.id=p.owner_user_id WHERE p.owner_user_id=$1 AND p.guest_club_id IS NULL AND p.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM club_profiles cp WHERE cp.club_id=$2 AND cp.profile_id=p.id) ORDER BY p.name`, [request.user.sub, parsed.data.clubId]),
       profilesForClub(parsed.data.clubId, request.user.sub, admin),
     ]);
-    const members: ClubMember[] = memberResult.rows.map((row) => ({ userId: row.user_id, username: row.username, ...(row.avatar ? { avatar: row.avatar } : {}), role: row.role, status: row.status, ...(row.joined_at ? { joinedAt: row.joined_at.toISOString() } : {}) }));
+    const members: ClubMember[] = memberResult.rows.map((row) => ({ userId: row.user_id, username: row.username, ...(row.avatar ? { avatar: row.avatar } : {}), role: row.role, status: row.status, ...(row.joined_at ? { joinedAt: row.joined_at.toISOString() } : {}), ...(row.suspended_until ? { suspendedUntil: row.suspended_until.toISOString() } : {}) }));
     const availableProfiles: ClubProfile[] = availableResult.rows.map((row) => ({ id: row.id, name: row.name, ...(row.color ? { color: row.color } : {}), ...(row.avatar ? { avatar: row.avatar } : {}), hasCustomAvatar: false, ownerUserId: row.owner_user_id, ownerUsername: row.owner_username, kind: "personal", canManage: true }));
     const detail: ClubDetail = { club: { ...mapClub(clubRow), ...(admin ? { inviteCode: clubRow.invite_code } : {}) }, members, profiles, availableProfiles };
     return detail;
@@ -146,7 +163,7 @@ const clubRoutes: FastifyPluginAsync = async (app) => {
     const club = clubResult.rows[0]; if (!club) return reply.code(404).send({ message: "Club introuvable." });
     const modes: ClubGameMode[] = modeResult.rows.map((row) => ({ key: row.mode_key, label: gameModeLabel(row.mode_key) }));
     if (query.data.mode !== "all" && !modes.some((mode) => mode.key === query.data.mode)) return reply.code(400).send({ message: "Ce mode ne possède aucune partie dans le club." });
-    const statsResult = await pool.query<{ profile_id: string; name: string; avatar: string | null; owner_username: string; kind: "personal" | "guest"; games: string; wins: string; darts: string; turns: string; points: string; best_turn: number }>(`WITH club_players AS (
+    const [statsResult, stateResult] = await Promise.all([pool.query<{ profile_id: string; name: string; avatar: string | null; owner_username: string; kind: "personal" | "guest"; games: string; wins: string; darts: string; turns: string; points: string; best_turn: number }>(`WITH club_players AS (
       SELECT p.id profile_id,p.name,COALESCE(cp.avatar,p.avatar) avatar,CASE WHEN p.guest_club_id IS NOT NULL THEN c.name ELSE u.username END owner_username,
         CASE WHEN p.guest_club_id IS NOT NULL THEN 'guest' ELSE 'personal' END kind
       FROM club_profiles cp JOIN profiles p ON p.id=cp.profile_id JOIN users u ON u.id=p.owner_user_id JOIN clubs c ON c.id=cp.club_id
@@ -160,10 +177,27 @@ const clubRoutes: FastifyPluginAsync = async (app) => {
       COALESCE(SUM((SELECT COUNT(*) FROM jsonb_array_elements(COALESCE(fp.state->'turns','[]'::jsonb)) turn_data WHERE turn_data->>'playerId'=cp.profile_id)),0)::text turns,
       COALESCE(SUM(fp.points_scored),0)::text points,COALESCE(MAX(fp.best_turn),0) best_turn
     FROM club_players cp LEFT JOIN filtered_participations fp ON fp.profile_id=cp.profile_id
-    GROUP BY cp.profile_id,cp.name,cp.avatar,cp.owner_username,cp.kind`, [params.data.clubId, query.data.mode]);
+    GROUP BY cp.profile_id,cp.name,cp.avatar,cp.owner_username,cp.kind`, [params.data.clubId, query.data.mode]), pool.query<{ state: unknown; played_at: Date }>(`SELECT g.state,g.client_updated_at played_at FROM games g WHERE g.club_id=$1 AND g.status='completed' AND g.deleted_at IS NULL AND ($2='all' OR ${gameModeKeySql}=$2) ORDER BY g.client_updated_at`, [params.data.clubId, query.data.mode])]);
+    const advanced = (profileId: string) => {
+      let scores100Plus = 0; let scores140Plus = 0; let scores180 = 0; let doublesHit = 0; let triplesHit = 0; let bullsHit = 0; let highestCheckout = 0;
+      const sectors = new Map<number, number>(); const recentForm: Array<{ date: string; averagePerDart: number }> = [];
+      for (const game of stateResult.rows) {
+        const state = game.state as { modeState?: { kind?: string }; turns?: Array<{ playerId?: string; turnScore?: number; scoreAfterTurn?: number; isBust?: boolean; darts?: Array<{ segment?: number | null; multiplier?: number; zone?: string }> }> };
+        const turns = (state.turns ?? []).filter((turn) => turn.playerId === profileId); let gamePoints = 0; let gameDarts = 0;
+        for (const turn of turns) {
+          const score = typeof turn.turnScore === "number" ? turn.turnScore : 0; gamePoints += score;
+          if (score >= 100) scores100Plus += 1; if (score >= 140) scores140Plus += 1; if (score === 180) scores180 += 1;
+          if (state.modeState?.kind === "x01" && turn.scoreAfterTurn === 0 && !turn.isBust) highestCheckout = Math.max(highestCheckout, score);
+          for (const dart of turn.darts ?? []) { gameDarts += 1; if (dart.multiplier === 2) doublesHit += 1; if (dart.multiplier === 3) triplesHit += 1; if (dart.zone === "outer-bull" || dart.zone === "inner-bull") bullsHit += 1; if (typeof dart.segment === "number") sectors.set(dart.segment, (sectors.get(dart.segment) ?? 0) + 1); }
+        }
+        if (gameDarts) recentForm.push({ date: game.played_at.toISOString(), averagePerDart: gamePoints / gameDarts });
+      }
+      const favoriteSector = [...sectors.entries()].sort((left, right) => right[1] - left[1] || left[0] - right[0])[0]?.[0];
+      return { scores100Plus, scores140Plus, scores180, doublesHit, triplesHit, bullsHit, highestCheckout, ...(favoriteSector ? { favoriteSector } : {}), recentForm: recentForm.slice(-10) };
+    };
     const leaderboard: ClubStatisticRow[] = statsResult.rows.map((row) => {
       const games = Number(row.games); const wins = Number(row.wins); const darts = Number(row.darts); const turns = Number(row.turns); const points = Number(row.points);
-      return { rank: 0, profileId: row.profile_id, name: row.name, ...(row.avatar ? { avatar: row.avatar } : {}), ownerUsername: row.owner_username, kind: row.kind, games, wins, losses: games - wins, winRate: games ? wins / games * 100 : 0, dartsThrown: darts, turnsPlayed: turns, pointsScored: points, averagePerDart: darts ? points / darts : 0, averagePerTurn: turns ? points / turns : 0, bestTurn: row.best_turn };
+      return { rank: 0, profileId: row.profile_id, name: row.name, ...(row.avatar ? { avatar: row.avatar } : {}), ownerUsername: row.owner_username, kind: row.kind, games, wins, losses: games - wins, winRate: games ? wins / games * 100 : 0, dartsThrown: darts, turnsPlayed: turns, pointsScored: points, averagePerDart: darts ? points / darts : 0, averagePerTurn: turns ? points / turns : 0, bestTurn: row.best_turn, ...advanced(row.profile_id) };
     }).sort((a, b) => b.wins - a.wins || b.winRate - a.winRate || b.averagePerDart - a.averagePerDart || b.games - a.games || a.name.localeCompare(b.name, "fr")).map((row, index) => ({ ...row, rank: index + 1 }));
     const response: ClubStatistics = { club: { id: club.id, name: club.name, ...(club.avatar ? { avatar: club.avatar } : {}) }, selectedMode: query.data.mode, modes, leaderboard };
     return response;
@@ -172,25 +206,32 @@ const clubRoutes: FastifyPluginAsync = async (app) => {
   app.get("/:clubId/messages", { preHandler: app.authenticate }, async (request, reply) => {
     const params = clubParams.safeParse(request.params); if (!params.success) return reply.code(400).send({ message: "Club invalide." });
     const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access) return;
-    const [clubResult, messageResult] = await Promise.all([
+    const [clubResult, messageResult, reactionResult] = await Promise.all([
       pool.query<{ id: string; name: string; avatar: string | null }>("SELECT id,name,avatar FROM clubs WHERE id=$1", [params.data.clubId]),
-      pool.query<{ id: string; club_id: string; author_user_id: string | null; author_username: string; author_avatar: string | null; content: string; created_at: Date; edited_at: Date | null }>(`SELECT * FROM (SELECT cm.id,cm.club_id,cm.author_user_id,cm.author_username,u.avatar author_avatar,cm.content,cm.created_at,cm.edited_at
-        FROM club_messages cm LEFT JOIN users u ON u.id=cm.author_user_id WHERE cm.club_id=$1 AND cm.deleted_at IS NULL ORDER BY cm.created_at DESC LIMIT 100) recent ORDER BY created_at`, [params.data.clubId]),
+      pool.query<{ id: string; club_id: string; author_user_id: string | null; author_username: string; author_avatar: string | null; content: string; created_at: Date; edited_at: Date | null; reply_id: string | null; reply_author_username: string | null; reply_content: string | null }>(`SELECT * FROM (SELECT cm.id,cm.club_id,cm.author_user_id,cm.author_username,u.avatar author_avatar,cm.content,cm.created_at,cm.edited_at,reply.id reply_id,reply.author_username reply_author_username,reply.content reply_content
+        FROM club_messages cm LEFT JOIN users u ON u.id=cm.author_user_id LEFT JOIN club_messages reply ON reply.id=cm.reply_to_message_id WHERE cm.club_id=$1 AND cm.deleted_at IS NULL ORDER BY cm.created_at DESC LIMIT 100) recent ORDER BY created_at`, [params.data.clubId]),
+      pool.query<{ message_id: string; emoji: string; count: string; reacted_by_me: boolean }>(`SELECT r.message_id,r.emoji,COUNT(*)::text count,BOOL_OR(r.user_id=$2) reacted_by_me FROM club_message_reactions r JOIN club_messages m ON m.id=r.message_id WHERE m.club_id=$1 AND m.deleted_at IS NULL GROUP BY r.message_id,r.emoji ORDER BY MIN(r.created_at)`, [params.data.clubId, request.user.sub]),
     ]);
     const club = clubResult.rows[0]; if (!club) return reply.code(404).send({ message: "Club introuvable." });
-    const messages: ClubMessage[] = messageResult.rows.map((row) => ({ id: row.id, clubId: row.club_id, ...(row.author_user_id ? { authorUserId: row.author_user_id } : {}), authorUsername: row.author_username, content: row.content, createdAt: row.created_at.toISOString(), ...(row.edited_at ? { editedAt: row.edited_at.toISOString() } : {}), canModify: row.author_user_id === request.user.sub }));
+    const reactions = new Map<string, ClubMessage["reactions"]>();
+    for (const row of reactionResult.rows) reactions.set(row.message_id, [...(reactions.get(row.message_id) ?? []), { emoji: row.emoji, count: Number(row.count), reactedByMe: row.reacted_by_me }]);
+    const messages: ClubMessage[] = messageResult.rows.map((row) => ({ id: row.id, clubId: row.club_id, ...(row.author_user_id ? { authorUserId: row.author_user_id } : {}), authorUsername: row.author_username, content: row.content, createdAt: row.created_at.toISOString(), ...(row.edited_at ? { editedAt: row.edited_at.toISOString() } : {}), canModify: row.author_user_id === request.user.sub, ...(row.reply_id && row.reply_author_username && row.reply_content ? { replyTo: { id: row.reply_id, authorUsername: row.reply_author_username, content: row.reply_content } } : {}), reactions: reactions.get(row.id) ?? [] }));
     const authorAvatars = Object.fromEntries(messageResult.rows.flatMap((row) => row.author_user_id && row.author_avatar ? [[row.author_user_id, row.author_avatar]] : []));
     const response: ClubChat = { club: { id: club.id, name: club.name, ...(club.avatar ? { avatar: club.avatar } : {}) }, messages, authorAvatars };
     return response;
   });
 
   app.post("/:clubId/messages", { preHandler: app.authenticate, config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (request, reply) => {
-    const params = clubParams.safeParse(request.params); const body = messageInput.safeParse(request.body);
+    const params = clubParams.safeParse(request.params); const body = messageCreateInput.safeParse(request.body);
     if (!params.success || !body.success) return reply.code(400).send({ message: "Le message doit contenir entre 1 et 1 000 caractères." });
     const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access) return;
     const id = randomUUID();
-    const result = await pool.query("INSERT INTO club_messages(id,club_id,author_user_id,author_username,content) SELECT $1,$2,u.id,u.username,$3 FROM users u WHERE u.id=$4 RETURNING id", [id, params.data.clubId, body.data.content, request.user.sub]);
-    return result.rowCount ? reply.code(201).send({ id }) : reply.code(404).send({ message: "Compte introuvable." });
+    if (body.data.replyToMessageId) { const target = await pool.query("SELECT 1 FROM club_messages WHERE id=$1 AND club_id=$2 AND deleted_at IS NULL", [body.data.replyToMessageId, params.data.clubId]); if (!target.rowCount) return reply.code(404).send({ message: "Le message auquel tu réponds n’existe plus." }); }
+    const result = await pool.query("INSERT INTO club_messages(id,club_id,author_user_id,author_username,content,reply_to_message_id) SELECT $1,$2,u.id,u.username,$3,$5 FROM users u WHERE u.id=$4 RETURNING id", [id, params.data.clubId, body.data.content, request.user.sub, body.data.replyToMessageId ?? null]);
+    if (!result.rowCount) return reply.code(404).send({ message: "Compte introuvable." });
+    await notifyClubMembers(params.data.clubId, { type: "chat", title: `Nouveau message de @${request.user.username}`, body: body.data.content.slice(0, 180), href: `/clubs/${params.data.clubId}/chat` }, request.user.sub);
+    await publishToClub(params.data.clubId, { type: "chat.changed", clubId: params.data.clubId });
+    return reply.code(201).send({ id });
   });
 
   app.delete("/:clubId/messages/:messageId", { preHandler: app.authenticate }, async (request, reply) => {
@@ -200,6 +241,7 @@ const clubRoutes: FastifyPluginAsync = async (app) => {
     const found = message.rows[0]; if (!found) return reply.code(404).send({ message: "Message introuvable." });
     if (found.author_user_id !== request.user.sub) return reply.code(403).send({ message: "Tu ne peux pas supprimer ce message." });
     await pool.query("UPDATE club_messages SET deleted_at=now() WHERE id=$1", [params.data.messageId]);
+    await publishToClub(params.data.clubId, { type: "chat.changed", clubId: params.data.clubId });
     return reply.code(204).send();
   });
 
@@ -211,7 +253,27 @@ const clubRoutes: FastifyPluginAsync = async (app) => {
     const found = message.rows[0]; if (!found) return reply.code(404).send({ message: "Message introuvable." });
     if (found.author_user_id !== request.user.sub) return reply.code(403).send({ message: "Tu ne peux pas modifier ce message." });
     const updated = await pool.query<{ edited_at: Date }>("UPDATE club_messages SET content=$1,edited_at=now() WHERE id=$2 RETURNING edited_at", [body.data.content, params.data.messageId]);
+    await publishToClub(params.data.clubId, { type: "chat.changed", clubId: params.data.clubId });
     return { updated: true, editedAt: updated.rows[0]?.edited_at.toISOString() };
+  });
+
+  app.post("/:clubId/messages/:messageId/reactions", { preHandler: app.authenticate }, async (request, reply) => {
+    const params = messageParams.safeParse(request.params); const body = reactionInput.safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ message: "Réaction invalide." });
+    const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access) return;
+    const target = await pool.query("SELECT 1 FROM club_messages WHERE id=$1 AND club_id=$2 AND deleted_at IS NULL", [params.data.messageId, params.data.clubId]); if (!target.rowCount) return reply.code(404).send({ message: "Message introuvable." });
+    const removed = await pool.query("DELETE FROM club_message_reactions WHERE message_id=$1 AND user_id=$2 AND emoji=$3", [params.data.messageId, request.user.sub, body.data.emoji]);
+    if (!removed.rowCount) await pool.query("INSERT INTO club_message_reactions(message_id,user_id,emoji) VALUES($1,$2,$3)", [params.data.messageId, request.user.sub, body.data.emoji]);
+    await publishToClub(params.data.clubId, { type: "chat.changed", clubId: params.data.clubId });
+    return { active: !removed.rowCount };
+  });
+
+  app.post("/:clubId/typing", { preHandler: app.authenticate, config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const params = clubParams.safeParse(request.params); const body = z.object({ typing: z.boolean() }).safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ message: "État invalide." });
+    const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access) return;
+    await publishToClub(params.data.clubId, { type: "chat.typing", clubId: params.data.clubId, userId: request.user.sub, username: request.user.username, typing: body.data.typing }, request.user.sub);
+    return reply.code(204).send();
   });
 
   app.patch("/:clubId", { preHandler: app.authenticate }, async (request, reply) => {
@@ -236,13 +298,21 @@ const clubRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/:clubId/members/:userId/approve", { preHandler: app.authenticate }, async (request, reply) => {
     const parsed = memberParams.safeParse(request.params); if (!parsed.success) return reply.code(400).send({ message: "Membre invalide." }); const access = await requireActive(request.user.sub, parsed.data.clubId, reply); if (!access) return; if (!isAdmin(access.role)) return reply.code(403).send({ message: "Droits administrateur requis." });
-    const result = await pool.query("UPDATE club_members SET status='active',joined_at=now(),left_at=NULL WHERE club_id=$1 AND user_id=$2 AND status='pending'", [parsed.data.clubId, parsed.data.userId]); return result.rowCount ? { status: "active" } : reply.code(404).send({ message: "Demande introuvable." });
+    const result = await pool.query("UPDATE club_members SET status='active',joined_at=now(),left_at=NULL,suspended_until=NULL WHERE club_id=$1 AND user_id=$2 AND status='pending'", [parsed.data.clubId, parsed.data.userId]);
+    if (!result.rowCount) return reply.code(404).send({ message: "Demande introuvable." });
+    await createNotification({ userId: parsed.data.userId, type: "club", title: "Demande acceptée", body: "Tu peux maintenant accéder au club.", href: `/clubs/${parsed.data.clubId}` });
+    await publishToClub(parsed.data.clubId, { type: "club.changed", clubId: parsed.data.clubId });
+    return { status: "active" };
   });
 
   app.patch("/:clubId/members/:userId", { preHandler: app.authenticate }, async (request, reply) => {
     const params = memberParams.safeParse(request.params); const body = z.object({ role: z.enum(["admin", "member"]) }).safeParse(request.body); if (!params.success || !body.success) return reply.code(400).send({ message: "Rôle invalide." });
     const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access) return; if (access.role !== "owner") return reply.code(403).send({ message: "Seul le propriétaire peut gérer les administrateurs." });
-    await pool.query("UPDATE club_members SET role=$1 WHERE club_id=$2 AND user_id=$3 AND role<>'owner' AND status='active'", [body.data.role, params.data.clubId, params.data.userId]); return { updated: true };
+    const result = await pool.query("UPDATE club_members SET role=$1 WHERE club_id=$2 AND user_id=$3 AND role<>'owner' AND status='active'", [body.data.role, params.data.clubId, params.data.userId]);
+    if (!result.rowCount) return reply.code(404).send({ message: "Membre actif introuvable." });
+    await createNotification({ userId: params.data.userId, type: "club", title: "Ton rôle a changé", body: body.data.role === "admin" ? "Tu es maintenant administrateur du club." : "Tu es maintenant membre du club.", href: `/clubs/${params.data.clubId}` });
+    await publishToClub(params.data.clubId, { type: "club.changed", clubId: params.data.clubId });
+    return { updated: true };
   });
 
   app.delete("/:clubId/members/:userId", { preHandler: app.authenticate }, async (request, reply) => {
@@ -250,7 +320,41 @@ const clubRoutes: FastifyPluginAsync = async (app) => {
     const target = await membership(parsed.data.userId, parsed.data.clubId); if (!target || target.role === "owner") return reply.code(403).send({ message: "Le propriétaire ne peut pas quitter le club." });
     const self = parsed.data.userId === request.user.sub; if (!self && !isAdmin(access.role)) return reply.code(403).send({ message: "Droits administrateur requis." }); if (!self && target.role === "admin" && access.role !== "owner") return reply.code(403).send({ message: "Seul le propriétaire peut retirer un administrateur." });
     const client = await pool.connect(); try { await client.query("BEGIN"); await client.query("UPDATE club_members SET status='former',role='member',left_at=now() WHERE club_id=$1 AND user_id=$2", [parsed.data.clubId, parsed.data.userId]); await client.query(`DELETE FROM club_profiles cp USING profiles p WHERE cp.profile_id=p.id AND cp.club_id=$1 AND p.owner_user_id=$2 AND p.guest_club_id IS NULL`, [parsed.data.clubId, parsed.data.userId]); await client.query("COMMIT"); } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+    if (!self) await createNotification({ userId: parsed.data.userId, type: "club", title: "Accès au club retiré", body: "Un administrateur t’a retiré du club." });
+    await publishToClub(parsed.data.clubId, { type: "club.changed", clubId: parsed.data.clubId });
     return reply.code(204).send();
+  });
+
+  app.post("/:clubId/members/:userId/suspend", { preHandler: app.authenticate }, async (request, reply) => {
+    const params = memberParams.safeParse(request.params); const body = z.object({ days: z.number().int().min(1).max(365) }).safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ message: "Durée de suspension invalide." });
+    const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access || !isAdmin(access.role)) return reply.code(403).send({ message: "Droits administrateur requis." });
+    const target = await membership(params.data.userId, params.data.clubId); if (!target || target.status !== "active" || target.role === "owner" || (target.role === "admin" && access.role !== "owner")) return reply.code(403).send({ message: "Ce membre ne peut pas être suspendu." });
+    await pool.query("UPDATE club_members SET status='suspended',suspended_until=now()+($1::text||' days')::interval WHERE club_id=$2 AND user_id=$3", [body.data.days, params.data.clubId, params.data.userId]);
+    await createNotification({ userId: params.data.userId, type: "club", title: "Accès au club suspendu", body: `Ton accès est suspendu pendant ${body.data.days} jour${body.data.days > 1 ? "s" : ""}.` });
+    await publishToClub(params.data.clubId, { type: "club.changed", clubId: params.data.clubId });
+    return { suspended: true };
+  });
+
+  app.post("/:clubId/members/:userId/reactivate", { preHandler: app.authenticate }, async (request, reply) => {
+    const params = memberParams.safeParse(request.params); if (!params.success) return reply.code(400).send({ message: "Membre invalide." });
+    const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access || !isAdmin(access.role)) return reply.code(403).send({ message: "Droits administrateur requis." });
+    const result = await pool.query("UPDATE club_members SET status='active',suspended_until=NULL WHERE club_id=$1 AND user_id=$2 AND status='suspended'", [params.data.clubId, params.data.userId]);
+    if (!result.rowCount) return reply.code(404).send({ message: "Suspension introuvable." });
+    await createNotification({ userId: params.data.userId, type: "club", title: "Accès au club rétabli", body: "Tu peux de nouveau accéder au club.", href: `/clubs/${params.data.clubId}` });
+    await publishToClub(params.data.clubId, { type: "club.changed", clubId: params.data.clubId });
+    return { active: true };
+  });
+
+  app.post("/:clubId/transfer-ownership", { preHandler: app.authenticate }, async (request, reply) => {
+    const params = clubParams.safeParse(request.params); const body = z.object({ userId: z.string().min(1).max(100) }).safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ message: "Nouveau propriétaire invalide." });
+    const access = await requireActive(request.user.sub, params.data.clubId, reply); if (!access || access.role !== "owner") return reply.code(403).send({ message: "Seul le propriétaire peut transférer le club." });
+    const target = await membership(body.data.userId, params.data.clubId); if (!target || target.status !== "active" || body.data.userId === request.user.sub) return reply.code(400).send({ message: "Choisis un autre membre actif." });
+    const client = await pool.connect(); try { await client.query("BEGIN"); await client.query("UPDATE club_members SET role='member' WHERE club_id=$1 AND user_id=$2", [params.data.clubId, request.user.sub]); await client.query("UPDATE club_members SET role='owner' WHERE club_id=$1 AND user_id=$2", [params.data.clubId, body.data.userId]); await client.query("UPDATE clubs SET owner_user_id=$1,updated_at=now() WHERE id=$2", [body.data.userId, params.data.clubId]); await client.query("COMMIT"); } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+    await createNotification({ userId: body.data.userId, type: "club", title: "Tu deviens propriétaire", body: "La propriété du club vient de t’être transférée.", href: `/clubs/${params.data.clubId}` });
+    await publishToClub(params.data.clubId, { type: "club.changed", clubId: params.data.clubId });
+    return { transferred: true };
   });
 
   app.post("/:clubId/profiles/:profileId", { preHandler: app.authenticate }, async (request, reply) => {

@@ -2,11 +2,13 @@ import { database } from "@/src/database/database";
 import { gameStateSchema } from "@/src/database/schemas";
 import type { GameState } from "@/src/game-engine/types";
 import { notifyCloudDataChanged } from "@/src/cloud/events";
+import { apiRequest } from "@/src/cloud/api";
 
 export async function saveGame(state: GameState): Promise<void> {
   if (typeof indexedDB === "undefined") return;
   const existing = await database.games.get(state.id);
   await database.games.put({ ...structuredClone(state), savedAt: new Date().toISOString(), ...(existing?.cloudUserId ? { cloudUserId: existing.cloudUserId } : {}), ...(existing?.cloudOwnerUserId ? { cloudOwnerUserId: existing.cloudOwnerUserId } : {}), ...(existing?.cloudVersion === undefined ? {} : { cloudVersion: existing.cloudVersion }) });
+  if (state.clubId && state.liveRoomId && navigator.onLine) void apiRequest(`/clubs/${state.clubId}/rooms/${state.liveRoomId}/state`, { method: "PATCH", body: JSON.stringify({ state }) }).catch(() => undefined);
   notifyCloudDataChanged();
 }
 

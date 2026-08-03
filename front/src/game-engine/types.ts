@@ -21,7 +21,7 @@ export interface Player {
   clubProfile?: boolean;
 }
 
-export interface GameContext { clubId: string; clubName: string }
+export interface GameContext { clubId: string; clubName: string; liveRoomId?: string }
 
 export interface Turn {
   id: string;
@@ -133,6 +133,7 @@ export interface GameState {
   completedAt?: string;
   clubId?: string;
   clubName?: string;
+  liveRoomId?: string;
 }
 
 export type GameEvent =

@@ -30,6 +30,7 @@ export function NewGameForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const clubId = searchParams.get("club");
+  const liveRoomId = searchParams.get("room");
   const start = useGameStore((store) => store.start);
   const startX01 = useGameStore((store) => store.startX01);
   const startAroundTheClock = useGameStore((store) => store.startAroundTheClock);
@@ -91,7 +92,7 @@ export function NewGameForm() {
       return { id: profile.id, name: profile.name, order, ...(profile.color ? { color: profile.color } : {}), ...(profile.avatar ? { avatar: profile.avatar } : {}), ...(profile.ownerUserId ? { ownerUserId: profile.ownerUserId } : {}), ...(profile.ownerUsername ? { ownerUsername: profile.ownerUsername } : {}), ...(profile.clubProfile ? { clubProfile: true } : {}) };
     });
     const ordered = randomOrder ? shuffled(resolvedPlayers) : resolvedPlayers;
-    const context = clubId && clubName ? { clubId, clubName } : undefined;
+    const context = clubId && clubName ? { clubId, clubName, ...(liveRoomId ? { liveRoomId } : {}) } : undefined;
     if (mode === "count-up") start(ordered, rounds ?? 8, context);
     else if (mode === "around-the-clock") startAroundTheClock(ordered, progressionRule, bullFinish, rounds, aroundDirection, context);
     else if (mode === "shanghai") startShanghai(ordered, rounds ?? 7, instantShanghaiWin, shanghaiStart, context);
@@ -126,7 +127,7 @@ export function NewGameForm() {
   return (
     <main className="mx-auto min-h-screen max-w-4xl px-4 py-8 sm:px-7">
       <div className="mb-7"><p className="text-xs font-black uppercase tracking-[.18em] text-[var(--lime)]">Configuration</p><h1 className="mt-2 text-4xl font-black tracking-[-.05em]">Nouvelle partie</h1></div>
-      {clubId && <div className="mb-5 rounded-2xl border border-[var(--lime)]/50 bg-[var(--lime)]/5 p-4"><p className="text-xs font-black uppercase tracking-[.16em] text-[var(--lime)]">Partie du club</p><strong className="mt-1 block text-xl">{clubName || "Chargement…"}</strong>{clubError&&<p className="mt-2 text-sm text-[#ff9b7a]">{clubError}</p>}</div>}
+      {clubId && <div className="mb-5 rounded-2xl border border-[var(--lime)]/50 bg-[var(--lime)]/5 p-4"><p className="text-xs font-black uppercase tracking-[.16em] text-[var(--lime)]">{liveRoomId?"Salon en direct":"Partie du club"}</p><strong className="mt-1 block text-xl">{clubName || "Chargement…"}</strong>{liveRoomId&&<p className="mt-1 text-sm text-[var(--muted)]">Chaque lancer sera synchronisé avec les spectateurs.</p>}{clubError&&<p className="mt-2 text-sm text-[#ff9b7a]">{clubError}</p>}</div>}
 
       <form onSubmit={submit} className="grid gap-5 lg:grid-cols-[1fr_1.1fr]">
         <div className="space-y-5">

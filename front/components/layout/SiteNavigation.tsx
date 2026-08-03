@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { AccountHeaderAvatar } from "@/components/account/AccountHeaderAvatar";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 const links = [
   { href: "/", label: "Accueil" },
@@ -62,7 +63,8 @@ export function SiteNavigation() {
             ))}
           </nav>
 
-          <div className="ml-auto lg:ml-2">
+          <div className="ml-auto flex items-center gap-2 lg:ml-2">
+            <NotificationBell />
             <AccountHeaderAvatar />
           </div>
           <button

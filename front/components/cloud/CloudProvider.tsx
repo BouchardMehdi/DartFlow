@@ -14,7 +14,7 @@ interface CloudContextValue {
   syncStatus: SyncStatus;
   lastSyncedAt: string | null;
   login(email: string, password: string): Promise<void>;
-  register(email: string, password: string, username: string): Promise<void>;
+  register(email: string, password: string, username: string): Promise<string>;
   logout(): Promise<void>;
   updateUsername(username: string): Promise<void>;
   updateAvatar(avatar: string | null): Promise<void>;
@@ -65,10 +65,11 @@ export function CloudProvider({ children }: { children: React.ReactNode }) {
   },[user,accessExpiresAt]);
 
   const authenticate = async (path: "/auth/login" | "/auth/register", email: string, password: string, username?: string) => {
-    const response = await apiRequest<{ user: AccountUser; accessExpiresAt: string }>(path, { method: "POST", body: JSON.stringify({ email, password, ...(username ? { username } : {}) }) });
+    const response = await apiRequest<{ user: AccountUser; accessExpiresAt: string; recoveryCode?: string }>(path, { method: "POST", body: JSON.stringify({ email, password, ...(username ? { username } : {}) }) });
     userRef.current = response.user; setUser(response.user); setAccessExpiresAt(response.accessExpiresAt); await database.syncMetadata.put({ id:"main",activeUserId:response.user.id });
+    return response.recoveryCode ?? "";
   };
-  const value = useMemo<CloudContextValue>(() => ({ user, loading, syncStatus, lastSyncedAt, login: (email, password) => authenticate("/auth/login", email, password), register: (email, password, username) => authenticate("/auth/register", email, password, username), logout: async () => { await apiRequest<void>("/auth/logout", { method: "POST" }); userRef.current = null; setUser(null); setAccessExpiresAt(null); setSyncStatus("idle"); await database.syncMetadata.put({id:"main"}); }, updateUsername: async (username) => { const response = await apiRequest<{ user: AccountUser }>("/auth/me", { method: "PATCH", body: JSON.stringify({ username }) }); userRef.current=response.user; setUser(response.user); }, updateAvatar: async (avatar) => { const response = await apiRequest<{ user: AccountUser }>("/auth/me/avatar", { method: "PATCH", body: JSON.stringify({ avatar }) }); userRef.current=response.user; setUser(response.user); }, syncNow }), [user, loading, syncStatus, lastSyncedAt, syncNow]);
+  const value = useMemo<CloudContextValue>(() => ({ user, loading, syncStatus, lastSyncedAt, login: async (email, password) => { await authenticate("/auth/login", email, password); }, register: (email, password, username) => authenticate("/auth/register", email, password, username), logout: async () => { await apiRequest<void>("/auth/logout", { method: "POST" }); userRef.current = null; setUser(null); setAccessExpiresAt(null); setSyncStatus("idle"); await database.syncMetadata.put({id:"main"}); }, updateUsername: async (username) => { const response = await apiRequest<{ user: AccountUser }>("/auth/me", { method: "PATCH", body: JSON.stringify({ username }) }); userRef.current=response.user; setUser(response.user); }, updateAvatar: async (avatar) => { const response = await apiRequest<{ user: AccountUser }>("/auth/me/avatar", { method: "PATCH", body: JSON.stringify({ avatar }) }); userRef.current=response.user; setUser(response.user); }, syncNow }), [user, loading, syncStatus, lastSyncedAt, syncNow]);
   return <CloudContext.Provider value={value}>{children}</CloudContext.Provider>;
 }
 
