@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -34,8 +35,15 @@ export function SiteNavigation() {
             onClick={() => setOpen(false)}
             className="flex min-w-0 items-center gap-3"
           >
-            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--lime)] text-xl font-black text-black">
-              ↗
+            <span className="relative size-11 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black shadow-lg shadow-black/30">
+              <Image
+                src="/icons/dartflow-192.png"
+                alt=""
+                fill
+                sizes="44px"
+                priority
+                className="object-cover"
+              />
             </span>
             <span className="min-w-0">
               <strong className="block text-lg leading-none tracking-[-.04em]">

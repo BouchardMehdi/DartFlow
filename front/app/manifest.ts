@@ -14,8 +14,9 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ["games", "sports", "utilities"],
     lang: "fr",
     icons: [
-      { src: "/icons/dartflow.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
-      { src: "/icons/dartflow-maskable.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
+      { src: "/icons/dartflow-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/icons/dartflow-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/icons/dartflow-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }
