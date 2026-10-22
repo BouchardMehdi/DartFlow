@@ -11,11 +11,11 @@ export const metadata: Metadata = {
     "Comptez vos points de fléchettes, simplement et sans connexion.",
   icons: {
     icon: [
-      { url: "/icons/dartflow-192.png", type: "image/png", sizes: "192x192" },
-      { url: "/icons/dartflow-512.png", type: "image/png", sizes: "512x512" },
+      { url: "/icons/dartflow-192.png?v=2", type: "image/png", sizes: "192x192" },
+      { url: "/icons/dartflow-512.png?v=2", type: "image/png", sizes: "512x512" },
     ],
-    shortcut: "/icons/dartflow-192.png",
-    apple: { url: "/icons/apple-touch-icon.png", type: "image/png", sizes: "180x180" },
+    shortcut: "/icons/dartflow-192.png?v=2",
+    apple: { url: "/icons/apple-touch-icon.png?v=2", type: "image/png", sizes: "180x180" },
   },
   applicationName: "DartFlow",
   appleWebApp: {
