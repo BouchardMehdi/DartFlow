@@ -4,6 +4,7 @@ import "./globals.css";
 import { CloudProvider } from "@/components/cloud/CloudProvider";
 import { SiteNavigation } from "@/components/layout/SiteNavigation";
 import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
+import { PwaUpdateNotice } from "@/components/pwa/PwaUpdateNotice";
 
 export const metadata: Metadata = {
   title: "DartFlow — Compteur de fléchettes",
@@ -39,7 +40,8 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body>
-        <SerwistProvider swUrl="/serwist/sw.js">
+        <SerwistProvider swUrl="/serwist/sw.js" reloadOnOnline={false}>
+          <PwaUpdateNotice />
           <CloudProvider>
             <RealtimeProvider>
               <SiteNavigation />

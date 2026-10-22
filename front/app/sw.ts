@@ -14,7 +14,8 @@ declare const self: ServiceWorkerGlobalScope;
 
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST!,
-  skipWaiting: true,
+  // Activate updates only after the user accepts the update notice.
+  skipWaiting: false,
   clientsClaim: true,
   navigationPreload: true,
   runtimeCaching: [

@@ -36,6 +36,12 @@ En production, placez l’application derrière un reverse proxy HTTPS, définis
 
 La procédure VPS complète pour `dartflow.bouchard-mehdi.fr` (DNS, `.env`, Nginx, Certbot, sauvegardes et mises à jour) se trouve dans [deploy.md](deploy.md).
 
+## Mises à jour de la PWA
+
+Les nouvelles versions sont téléchargées en arrière-plan, sans réinstallation. Une vérification est faite à l’ouverture, au retour sur l’application ou de la connexion, puis toutes les cinq minutes lorsque l’application est visible et connectée.
+
+Le message « Nouvelle version disponible » propose **Actualiser** ou **Plus tard**. Il reste masqué pendant la saisie d’une partie et apparaît à sa fin ou en quittant l’écran de jeu. L’actualisation sauvegarde la partie avant de recharger ; le retour de la connexion ne provoque aucun rechargement automatique. L’icône de l’écran d’accueil peut toutefois nécessiter un nouvel ajout selon le téléphone.
+
 ## Synchronisation
 
 Dexie reste la source immédiate sur l’appareil. Après connexion :
