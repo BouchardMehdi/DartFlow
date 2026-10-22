@@ -15,6 +15,23 @@ import { apiRequest } from "@/src/cloud/api";
 const COLORS = ["#c8f03d", "#ff6b35", "#57b8ff", "#f25f8b", "#b99cff", "#45d6a8", "#ffd166", "#f28f3b"];
 const makePlayer = (index: number): Player => ({ id: crypto.randomUUID(), name: `Joueur ${index + 1}`, color: COLORS[index] ?? "#c8f03d", order: index });
 type SetupMode = "count-up" | "301" | "501" | "701" | "around-the-clock" | "shanghai" | "cricket" | "killer" | "training-doubles" | "training-triples" | "training-checkout" | "training-bobs-27" | "training-random-target";
+type GameMode = "classic" | "count-up" | "around-the-clock" | "shanghai" | "cricket" | "killer" | "training";
+const GAME_MODES: { value: GameMode; label: string }[] = [
+  { value: "classic", label: "Classique" },
+  { value: "cricket", label: "Cricket" },
+  { value: "count-up", label: "Count-Up" },
+  { value: "around-the-clock", label: "Around the Clock" },
+  { value: "shanghai", label: "Shanghai" },
+  { value: "killer", label: "Killer" },
+  { value: "training", label: "Entraînement" },
+];
+const TRAINING_VARIANTS: { value: TrainingType; label: string }[] = [
+  { value: "doubles", label: "Doubles" },
+  { value: "triples", label: "Triples" },
+  { value: "checkout", label: "Checkout Challenge" },
+  { value: "bobs-27", label: "Bob’s 27" },
+  { value: "random-target", label: "Cible aléatoire" },
+];
 const trainingTypeFor = (mode: SetupMode): TrainingType | null => mode.startsWith("training-") ? mode.replace("training-", "") as TrainingType : null;
 
 function shuffled(players: Player[]): Player[] {
@@ -39,7 +56,10 @@ export function NewGameForm() {
   const startCricket = useGameStore((store) => store.startCricket);
   const startKiller = useGameStore((store) => store.startKiller);
   const startTraining = useGameStore((store) => store.startTraining);
-  const [mode, setMode] = useState<SetupMode>("count-up");
+  const [gameMode, setGameMode] = useState<GameMode>("count-up");
+  const [classicVariant, setClassicVariant] = useState<"301" | "501" | "701">("501");
+  const [trainingVariant, setTrainingVariant] = useState<TrainingType>("doubles");
+  const mode: SetupMode = gameMode === "classic" ? classicVariant : gameMode === "training" ? `training-${trainingVariant}` : gameMode;
   const [players, setPlayers] = useState<Player[]>(() => [makePlayer(0), makePlayer(1)]);
   const [rounds, setRounds] = useState<number | null>(8);
   const [randomOrder, setRandomOrder] = useState(false);
@@ -81,6 +101,13 @@ export function NewGameForm() {
     setPlayers((current) => count > current.length
       ? [...current, ...Array.from({ length: count - current.length }, (_, index) => makePlayer(current.length + index))]
       : current.slice(0, count));
+  };
+
+  const changeGameMode = (nextMode: GameMode) => {
+    setGameMode(nextMode);
+    if ((nextMode === "count-up" || nextMode === "shanghai" || nextMode === "training") && rounds === null) setRounds(nextMode === "shanghai" ? 7 : 10);
+    if (nextMode === "killer" && players.length < 2) setPlayerCount(2);
+    if (nextMode === "training" && players.length !== 1) setPlayerCount(1);
   };
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -134,8 +161,12 @@ export function NewGameForm() {
         <div className="space-y-5">
           <section className="rounded-[1.6rem] border border-[var(--line)] bg-[var(--panel)] p-5">
             <span className="text-xs font-black uppercase tracking-[.18em] text-[var(--lime)]">01 · Mode de jeu</span>
-            <label className="mt-4 block"><span className="mb-2 block text-sm font-bold">Mode</span><SelectField value={mode} ariaLabel="Mode de jeu" options={[{ value: "count-up", label: "Count‑Up" }, { value: "301", label: "301" }, { value: "501", label: "501" }, { value: "701", label: "701" }, { value: "around-the-clock", label: "Around the Clock" }, { value: "shanghai", label: "Shanghai" }, { value: "cricket", label: "Cricket standard" }, { value: "killer", label: "Killer" }, { value: "training-doubles", label: "Entraînement aux doubles" }, { value: "training-triples", label: "Entraînement aux triples" }, { value: "training-checkout", label: "Checkout Challenge" }, { value: "training-bobs-27", label: "Bob’s 27" }, { value: "training-random-target", label: "Cible aléatoire" }]} onChange={(value) => { const nextMode = value as SetupMode; setMode(nextMode); if ((nextMode === "count-up" || nextMode === "shanghai" || nextMode.startsWith("training-")) && rounds === null) setRounds(nextMode === "shanghai" ? 7 : 10); if (nextMode === "killer" && players.length < 2) setPlayerCount(2); if (nextMode.startsWith("training-") && players.length !== 1) setPlayerCount(1); }} /></label>
-            <div className="mt-4 rounded-xl bg-black/20 p-4"><p className="font-bold">{mode === "count-up" ? "Le plus gros score gagne" : mode === "around-the-clock" ? "Faites le tour de la cible" : mode === "shanghai" ? "Marquez sur le secteur de la manche" : mode === "cricket" && (cricketVariant === "random" || cricketVariant === "hidden") ? CRICKET_VARIANTS[cricketVariant] : mode === "cricket" ? "Fermez 20 à 15 et le Bull" : mode === "killer" ? "Devenez Killer et éliminez vos adversaires" : mode === "training-doubles" ? "Travaillez tous les doubles" : mode === "training-triples" ? "Travaillez tous les triples" : mode === "training-checkout" ? "Terminez des scores aléatoires" : mode === "training-bobs-27" ? "Testez votre régularité sur les doubles" : mode === "training-random-target" ? "Visez une nouvelle cible à chaque fléchette" : `Atteignez exactement zéro depuis ${mode}`}</p><p className="mt-1 text-sm leading-6 text-[var(--muted)]">{mode === "count-up" ? "Chaque joueur lance trois fléchettes par manche. Tous les points sont additionnés." : mode === "around-the-clock" ? "Touchez les secteurs dans l’ordre, de 1 à 20, puis éventuellement le bull." : mode === "shanghai" ? "Réalisez un simple, un double et un triple du numéro actif pour faire Shanghai." : mode === "cricket" && cricketVariant === "hidden" ? "Six numéros et le bull sont masqués. Touchez une cible pour la révéler pour tous les joueurs." : mode === "cricket" && cricketVariant === "random" ? "Six numéros tirés au hasard et le bull remplacent les cibles habituelles. Les règles de score restent celles du Cricket standard." : mode === "cricket" ? "Trois marques ferment un secteur. Les marques excédentaires rapportent des points tant qu’un adversaire reste ouvert." : mode === "killer" ? "Faites trois marques sur votre numéro, puis retirez les vies des autres joueurs." : mode === "training-doubles" || mode === "training-triples" ? "Trois fléchettes sur chaque cible, du 1 au 20." : mode === "training-checkout" ? "Vous disposez de trois fléchettes par checkout, en Double Out." : mode === "training-bobs-27" ? "Partez de 27 points et jouez successivement D1 à D20." : mode === "training-random-target" ? "Une cible simple, double, triple ou bull est tirée après chaque lancer." : "Un dépassement ou une sortie invalide provoque un bust et annule le tour."}</p></div>
+            <div className="mt-4 block"><span className="mb-2 block text-sm font-bold">Mode</span><SelectField value={gameMode} ariaLabel="Mode de jeu" options={GAME_MODES} onChange={(value) => changeGameMode(value as GameMode)} /></div>
+            {gameMode === "classic" && <div className="mt-4 block"><span className="mb-2 block text-sm font-bold">Variante</span><SelectField value={classicVariant} ariaLabel="Variante du Classique" options={[301, 501, 701].map(value => ({ value: String(value), label: String(value) }))} onChange={value => setClassicVariant(value as "301" | "501" | "701")} /></div>}
+            {gameMode === "cricket" && <div className="mt-4 block"><span className="mb-2 block text-sm font-bold">Variante</span><SelectField value={cricketVariant} ariaLabel="Variante du Cricket" options={Object.entries(CRICKET_VARIANTS).map(([value, label]) => ({ value, label }))} onChange={value => setCricketVariant(value as CricketVariant)} /></div>}
+            {gameMode === "training" && <div className="mt-4 block"><span className="mb-2 block text-sm font-bold">Variante</span><SelectField value={trainingVariant} ariaLabel="Variante de l'entraînement" options={TRAINING_VARIANTS} onChange={value => setTrainingVariant(value as TrainingType)} /></div>}
+
+            <div className="mt-4 rounded-xl bg-black/20 p-4"><p className="font-bold">{mode === "count-up" ? "Le plus gros score gagne" : mode === "around-the-clock" ? "Faites le tour de la cible" : mode === "shanghai" ? "Marquez sur le secteur de la manche" : mode === "cricket" && (cricketVariant === "random" || cricketVariant === "hidden") ? CRICKET_VARIANTS[cricketVariant] : mode === "cricket" ? "Fermez 20 à 15 et le Bull" : mode === "killer" ? "Devenez Killer et éliminez vos adversaires" : mode === "training-doubles" ? "Travaillez tous les doubles" : mode === "training-triples" ? "Travaillez tous les triples" : mode === "training-checkout" ? "Terminez des scores aléatoires" : mode === "training-bobs-27" ? "Testez votre régularité sur les doubles" : mode === "training-random-target" ? "Visez une nouvelle cible à chaque fléchette" : `Atteignez exactement zéro depuis ${mode}`}</p><p className="mt-1 text-sm leading-6 text-[var(--muted)]">{mode === "count-up" ? "Chaque joueur lance trois fléchettes par manche. Tous les points sont additionnés." : mode === "around-the-clock" ? "Touchez les secteurs dans l’ordre, de 1 à 20, puis éventuellement le bull." : mode === "shanghai" ? "Réalisez un simple, un double et un triple du numéro actif pour faire Shanghai." : mode === "cricket" && cricketVariant === "hidden" ? "Six numéros et le bull sont masqués. Touchez une cible pour la révéler pour tous les joueurs." : mode === "cricket" && cricketVariant === "random" ? "Six numéros tirés au hasard et le bull remplacent les cibles habituelles. Les règles de score restent celles du Cricket standard." : mode === "cricket" && cricketVariant === "no-score" ? "Le premier qui ferme toutes les cibles gagne. Aucun point ne compte." : mode === "cricket" && cricketVariant === "cut-throat" ? "Les marques en plus donnent des points aux adversaires dont la cible reste ouverte. Fermez tout avec le score le plus faible." : mode === "cricket" ? "Trois marques ferment un secteur. Les marques excédentaires rapportent des points tant qu’un adversaire reste ouvert." : mode === "killer" ? "Faites trois marques sur votre numéro, puis retirez les vies des autres joueurs." : mode === "training-doubles" || mode === "training-triples" ? "Trois fléchettes sur chaque cible, du 1 au 20." : mode === "training-checkout" ? "Vous disposez de trois fléchettes par checkout, en Double Out." : mode === "training-bobs-27" ? "Partez de 27 points et jouez successivement D1 à D20." : mode === "training-random-target" ? "Une cible simple, double, triple ou bull est tirée après chaque lancer." : "Un dépassement ou une sortie invalide provoque un bust et annule le tour."}</p></div>
           </section>
 
           <section className="rounded-[1.6rem] border border-[var(--line)] bg-[var(--panel)] p-5">
@@ -146,7 +177,7 @@ export function NewGameForm() {
             {mode === "shanghai" && <label className="mt-4 flex items-center gap-3 rounded-xl border border-[var(--line)] p-3"><input type="checkbox" checked={instantShanghaiWin} onChange={(event) => setInstantShanghaiWin(event.target.checked)} className="size-5 accent-[var(--lime)]" /><span><strong className="block">Victoire immédiate sur un Shanghai</strong><span className="text-sm text-[var(--muted)]">Simple, double et triple du numéro actif.</span></span></label>}
             {mode === "shanghai" && <label className="mt-4 block"><span className="mb-2 block text-sm font-bold">Premier secteur</span><SelectField value={String(shanghaiStart)} ariaLabel="Premier secteur" options={Array.from({ length: Math.max(1, rounds ?? 7) }, (_, index) => ({ value: String(index + 1), label: String(index + 1) }))} onChange={(value) => setShanghaiStart(Number(value))} /></label>}
             {mode === "killer" && <div className="mt-4 space-y-3"><div className="grid gap-4 sm:grid-cols-2"><label><span className="mb-2 block text-sm font-bold">Vies par joueur</span><SelectField value={String(lives)} ariaLabel="Vies par joueur" options={[1, 2, 3, 4, 5].map((value) => ({ value: String(value), label: `${value} vie${value > 1 ? "s" : ""}` }))} onChange={(value) => setLives(Number(value))} /></label><label><span className="mb-2 block text-sm font-bold">Marques pour devenir Killer</span><SelectField value={String(marksToKiller)} ariaLabel="Marques pour devenir Killer" options={[1, 2, 3, 4, 5].map((value) => ({ value: String(value), label: String(value) }))} onChange={(value) => setMarksToKiller(Number(value))} /></label></div><label className="flex items-center gap-3 rounded-xl border border-[var(--line)] p-3"><input type="checkbox" checked={selfDamage} onChange={(event) => setSelfDamage(event.target.checked)} className="size-5 accent-[var(--lime)]" /><span><strong className="block">Auto-dégâts activés</strong><span className="text-sm text-[var(--muted)]">Un Killer perd des vies s’il touche son propre numéro.</span></span></label></div>}
-            {mode === "cricket" && <label className="mt-4 block"><span className="mb-2 block text-sm font-bold">Variante</span><SelectField value={cricketVariant} ariaLabel="Variante du Cricket" options={Object.entries(CRICKET_VARIANTS).map(([value, label]) => ({ value, label }))} onChange={(value) => setCricketVariant(value as CricketVariant)} /></label>}
+
           </section>
         </div>
 

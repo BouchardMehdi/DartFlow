@@ -25,7 +25,7 @@ for (const variant of ["random", "hidden"] as const) {
     await page.route("**/api/**", route => route.fulfill({ status: 401, json: { message: "Non connecté" } }));
     await page.goto("/new-game");
     await page.getByRole("combobox", { name: "Mode de jeu", exact: true }).click();
-    await page.getByRole("option", { name: "Cricket standard", exact: true }).click();
+    await page.getByRole("option", { name: "Cricket", exact: true }).click();
     await page.getByRole("combobox", { name: "Variante du Cricket" }).click();
     await expect(page.getByRole("option")).toHaveCount(5);
     const label = variant === "random" ? "Random Cricket" : "Hidden Cricket";

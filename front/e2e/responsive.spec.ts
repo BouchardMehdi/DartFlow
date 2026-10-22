@@ -85,7 +85,7 @@ for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }
     page.on("pageerror", error => {
       // WebKit reports cancelled mocked fetches as access-control errors when
       // moving to the next page. Keep genuine application exceptions visible.
-      if (!/^\/localhost:3000\/api\/[\w/]+ due to access control checks\.$/.test(error.message)) errors.push(error.message);
+      if (!/^\/localhost:3000\/api\/[\w/-]+ due to access control checks\.$/.test(error.message)) errors.push(error.message);
     });
     await mockApi(page);
     await seed(page);
