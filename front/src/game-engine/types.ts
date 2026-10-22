@@ -1,3 +1,4 @@
+import type { X01StartingScore } from "@dartflow/shared";
 export type DartMultiplier = 0 | 1 | 2 | 3;
 export type DartZone = "miss" | "single-inner" | "single-outer" | "double" | "triple" | "outer-bull" | "inner-bull";
 
@@ -54,7 +55,7 @@ export interface X01PlayerState {
 
 export interface X01ModeState {
   kind: "x01";
-  startingScore: 301 | 501 | 701;
+  startingScore: X01StartingScore;
   entryRule: X01EntryRule;
   exitRule: X01ExitRule;
   maxRounds: number | null;

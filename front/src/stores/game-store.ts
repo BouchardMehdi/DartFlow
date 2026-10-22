@@ -1,3 +1,4 @@
+import type { X01StartingScore } from "@dartflow/shared";
 import { create } from "zustand";
 import { abandonGame, createCountUpGame, createHistory, undoLastThrow } from "@/src/game-engine/count-up";
 import { processThrow } from "@/src/game-engine/game-engine";
@@ -17,7 +18,7 @@ interface GameStore {
   history: GameHistory;
   hasStarted: boolean;
   start: (players: Player[], rounds: number, context?: GameContext) => void;
-  startX01: (players: Player[], score: 301 | 501 | 701, entry: X01EntryRule, exit: X01ExitRule, rounds: number | null, legsToWin?: number, setsToWin?: number, context?: GameContext) => void;
+  startX01: (players: Player[], score: X01StartingScore, entry: X01EntryRule, exit: X01ExitRule, rounds: number | null, legsToWin?: number, setsToWin?: number, context?: GameContext) => void;
   startAroundTheClock: (players: Player[], progression: AroundTheClockProgressionRule, bullFinish: boolean, rounds: number | null, direction?: "ascending" | "descending", context?: GameContext) => void;
   startShanghai: (players: Player[], rounds: number, instantWin: boolean, startTarget?: number, context?: GameContext) => void;
   startCricket: (players: Player[], rounds: number | null, variant: CricketVariant, context?: GameContext) => void;

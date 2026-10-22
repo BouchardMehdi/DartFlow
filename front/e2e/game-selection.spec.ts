@@ -33,6 +33,9 @@ const cases = [
   { family: "Classique", variant: "301", expected: { kind: "x01", startingScore: 301 } },
   { family: "Classique", variant: "501", expected: { kind: "x01", startingScore: 501 } },
   { family: "Classique", variant: "701", expected: { kind: "x01", startingScore: 701 } },
+  { family: "Classique", variant: "901", expected: { kind: "x01", startingScore: 901 } },
+  { family: "Classique", variant: "1101", expected: { kind: "x01", startingScore: 1101 } },
+  { family: "Classique", variant: "1501", expected: { kind: "x01", startingScore: 1501 } },
   { family: "Cricket", variant: "Cricket standard", expected: { kind: "cricket", variant: "standard" } },
   { family: "Cricket", variant: "Cricket sans points", expected: { kind: "cricket", variant: "no-score" } },
   { family: "Cricket", variant: "Cut-Throat Cricket", expected: { kind: "cricket", variant: "cut-throat" } },
@@ -51,6 +54,8 @@ const cases = [
 
 for (const item of cases) {
   test(`démarre ${item.family}${item.variant ? ` / ${item.variant}` : " sans variante"}`, async ({ page }) => {
+    const newClassic = ["901", "1101", "1501"].includes(item.variant ?? "");
+    if (newClassic) await page.setViewportSize({ width: 320, height: 740 });
     await page.goto("/new-game");
     await choose(page, "Mode de jeu", item.family);
     const variant = page.getByRole("combobox", { name: /^Variante/ });
@@ -64,6 +69,18 @@ for (const item of cases) {
     await expect.poll(async () => (await savedGame(page))?.modeState).toMatchObject(item.expected);
     const game = (await savedGame(page))!;
     expect(game.players).toHaveLength(item.family === "Entraînement" ? 1 : 2);
+    if (newClassic) {
+      await page.getByRole("button", { name: "Triple", exact: true }).click();
+      await page.getByRole("button", { name: "Triple 20", exact: true }).click();
+      await expect.poll(async () => {
+        const saved = await savedGame(page);
+        return saved?.modeState.kind === "x01" ? saved.modeState.players[game.players[0]!.id]?.score : undefined;
+      }).toBe(Number(item.variant) - 60);
+      await page.reload();
+      await expect(page.getByRole("heading", { name: "Joueur 1", exact: true })).toBeVisible();
+      await expect(page.locator("main > header")).toContainText(item.variant!);
+      await expect(page.getByLabel("Fléchettes du tour", { exact: true })).toContainText("60");
+    }
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
   });
 }

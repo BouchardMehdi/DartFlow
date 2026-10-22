@@ -1,5 +1,6 @@
 "use client";
 
+import { X01_STARTING_SCORES, type X01StartingScore } from "@dartflow/shared";
 import type { ClubProfile } from "@dartflow/shared";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -14,7 +15,7 @@ import { apiRequest } from "@/src/cloud/api";
 
 const COLORS = ["#c8f03d", "#ff6b35", "#57b8ff", "#f25f8b", "#b99cff", "#45d6a8", "#ffd166", "#f28f3b"];
 const makePlayer = (index: number): Player => ({ id: crypto.randomUUID(), name: `Joueur ${index + 1}`, color: COLORS[index] ?? "#c8f03d", order: index });
-type SetupMode = "count-up" | "301" | "501" | "701" | "around-the-clock" | "shanghai" | "cricket" | "killer" | "training-doubles" | "training-triples" | "training-checkout" | "training-bobs-27" | "training-random-target";
+type SetupMode = "count-up" | `${X01StartingScore}` | "around-the-clock" | "shanghai" | "cricket" | "killer" | "training-doubles" | "training-triples" | "training-checkout" | "training-bobs-27" | "training-random-target";
 type GameMode = "classic" | "count-up" | "around-the-clock" | "shanghai" | "cricket" | "killer" | "training";
 const GAME_MODES: { value: GameMode; label: string }[] = [
   { value: "classic", label: "Classique" },
@@ -57,7 +58,7 @@ export function NewGameForm() {
   const startKiller = useGameStore((store) => store.startKiller);
   const startTraining = useGameStore((store) => store.startTraining);
   const [gameMode, setGameMode] = useState<GameMode>("count-up");
-  const [classicVariant, setClassicVariant] = useState<"301" | "501" | "701">("501");
+  const [classicVariant, setClassicVariant] = useState<`${X01StartingScore}`>("501");
   const [trainingVariant, setTrainingVariant] = useState<TrainingType>("doubles");
   const mode: SetupMode = gameMode === "classic" ? classicVariant : gameMode === "training" ? `training-${trainingVariant}` : gameMode;
   const [players, setPlayers] = useState<Player[]>(() => [makePlayer(0), makePlayer(1)]);
@@ -91,7 +92,7 @@ export function NewGameForm() {
     }).catch((error) => { if (active) setClubError(error instanceof Error ? error.message : "Club inaccessible."); });
     return () => { active = false; };
   }, [clubId]);
-  const isX01 = mode === "301" || mode === "501" || mode === "701";
+  const isX01 = gameMode === "classic";
   const trainingType = trainingTypeFor(mode); const isTraining = trainingType !== null;
   const validation = useMemo(() => mode === "count-up" ? countUpConfigSchema.safeParse({ players, rounds }) : mode === "around-the-clock" ? aroundTheClockConfigSchema.safeParse({ players, progressionRule, direction: aroundDirection, bullFinish, rounds }) : mode === "shanghai" ? shanghaiConfigSchema.safeParse({ players, rounds, startTarget: shanghaiStart, instantShanghaiWin }) : mode === "cricket" ? cricketConfigSchema.safeParse({ players, rounds, variant: cricketVariant }) : mode === "killer" ? killerConfigSchema.safeParse({ players, lives, marksToKiller, selfDamage }) : trainingType ? trainingConfigSchema.safeParse({ players, trainingType, rounds: rounds ?? 10 }) : x01ConfigSchema.safeParse({ players, startingScore: Number(mode), entryRule, exitRule, rounds, legsToWin, setsToWin }), [players, rounds, mode, trainingType, entryRule, exitRule, progressionRule, aroundDirection, bullFinish, instantShanghaiWin, shanghaiStart, lives, marksToKiller, selfDamage, legsToWin, setsToWin, cricketVariant]);
   const hasDuplicateProfiles = useMemo(() => { const identities = players.map((player) => savedPlayers.some((profile) => profile.id === player.id) ? `profile:${player.id}` : `new:${normalizePlayerName(player.name)}`).filter(Boolean); return new Set(identities).size !== identities.length; }, [players, savedPlayers]);
@@ -127,7 +128,7 @@ export function NewGameForm() {
     else if (mode === "cricket") startCricket(ordered, rounds, cricketVariant, context);
     else if (mode === "killer") startKiller(ordered, lives, selfDamage, marksToKiller, context);
     else if (trainingType) startTraining(ordered, trainingType, rounds ?? 10, context);
-    else startX01(ordered, Number(mode) as 301 | 501 | 701, entryRule, exitRule, rounds, legsToWin, setsToWin, context);
+    else startX01(ordered, Number(mode) as X01StartingScore, entryRule, exitRule, rounds, legsToWin, setsToWin, context);
     router.push("/game");
   };
 
@@ -162,7 +163,7 @@ export function NewGameForm() {
           <section className="rounded-[1.6rem] border border-[var(--line)] bg-[var(--panel)] p-5">
             <span className="text-xs font-black uppercase tracking-[.18em] text-[var(--lime)]">01 · Mode de jeu</span>
             <div className="mt-4 block"><span className="mb-2 block text-sm font-bold">Mode</span><SelectField value={gameMode} ariaLabel="Mode de jeu" options={GAME_MODES} onChange={(value) => changeGameMode(value as GameMode)} /></div>
-            {gameMode === "classic" && <div className="mt-4 block"><span className="mb-2 block text-sm font-bold">Variante</span><SelectField value={classicVariant} ariaLabel="Variante du Classique" options={[301, 501, 701].map(value => ({ value: String(value), label: String(value) }))} onChange={value => setClassicVariant(value as "301" | "501" | "701")} /></div>}
+            {gameMode === "classic" && <div className="mt-4 block"><span className="mb-2 block text-sm font-bold">Variante</span><SelectField value={classicVariant} ariaLabel="Variante du Classique" options={X01_STARTING_SCORES.map(value => ({ value: String(value), label: String(value) }))} onChange={value => setClassicVariant(value as `${X01StartingScore}`)} /></div>}
             {gameMode === "cricket" && <div className="mt-4 block"><span className="mb-2 block text-sm font-bold">Variante</span><SelectField value={cricketVariant} ariaLabel="Variante du Cricket" options={Object.entries(CRICKET_VARIANTS).map(([value, label]) => ({ value, label }))} onChange={value => setCricketVariant(value as CricketVariant)} /></div>}
             {gameMode === "training" && <div className="mt-4 block"><span className="mb-2 block text-sm font-bold">Variante</span><SelectField value={trainingVariant} ariaLabel="Variante de l'entraînement" options={TRAINING_VARIANTS} onChange={value => setTrainingVariant(value as TrainingType)} /></div>}
 

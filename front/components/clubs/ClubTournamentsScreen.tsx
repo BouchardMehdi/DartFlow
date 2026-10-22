@@ -1,5 +1,6 @@
 "use client";
 
+import { X01_STARTING_SCORES } from "@dartflow/shared";
 import type { ClubDetail, ClubTournament, TournamentFormat } from "@dartflow/shared";
 import Image from "next/image";
 import Link from "next/link";
@@ -9,7 +10,7 @@ import { onRealtime } from "@/components/realtime/RealtimeProvider";
 import { SelectField } from "@/components/ui/SelectField";
 import { apiRequest } from "@/src/cloud/api";
 
-const modes=[{value:"301",label:"301"},{value:"501",label:"501"},{value:"701",label:"701"},{value:"count-up",label:"Count-Up"},{value:"around-the-clock",label:"Around the Clock"},{value:"shanghai",label:"Shanghai"},{value:"cricket-standard",label:"Cricket standard"},{value:"killer",label:"Killer"}];
+const modes=[...X01_STARTING_SCORES.map(score=>({value:String(score),label:String(score)})),{value:"count-up",label:"Count-Up"},{value:"around-the-clock",label:"Around the Clock"},{value:"shanghai",label:"Shanghai"},{value:"cricket-standard",label:"Cricket standard"},{value:"killer",label:"Killer"}];
 
 export function ClubTournamentsScreen({clubId}:{clubId:string}){
   const router=useRouter();

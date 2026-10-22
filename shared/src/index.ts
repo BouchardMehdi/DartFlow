@@ -1,3 +1,6 @@
+export const X01_STARTING_SCORES = [301, 501, 701, 901, 1101, 1501] as const;
+export type X01StartingScore = (typeof X01_STARTING_SCORES)[number];
+
 export interface AccountUser {
   id: string;
   email: string;

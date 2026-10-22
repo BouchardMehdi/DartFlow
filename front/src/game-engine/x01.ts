@@ -1,3 +1,4 @@
+import type { X01StartingScore } from "@dartflow/shared";
 import type { DartThrow, EngineResult, GameEvent, GameState, Player, Turn, X01EntryRule, X01ExitRule, X01PlayerState } from "./types";
 import { getTurnScoreEvent } from "./score-events";
 
@@ -10,7 +11,7 @@ const qualifies = (dart: DartThrow, rule: X01EntryRule | X01ExitRule) =>
   rule === "straight" || (rule === "double" && (dart.multiplier === 2 || dart.zone === "inner-bull")) ||
   (rule === "master" && (dart.multiplier === 2 || dart.multiplier === 3 || dart.zone === "inner-bull"));
 
-export function createX01Game(players: Player[], startingScore: 301 | 501 | 701, entryRule: X01EntryRule, exitRule: X01ExitRule, maxRounds: number | null = 20, legsToWin = 1, setsToWin = 1, now = new Date()): GameState {
+export function createX01Game(players: Player[], startingScore: X01StartingScore, entryRule: X01EntryRule, exitRule: X01ExitRule, maxRounds: number | null = 20, legsToWin = 1, setsToWin = 1, now = new Date()): GameState {
   if (players.length < 1 || players.length > 8) throw new Error("Une partie requiert de 1 à 8 joueurs");
   if (maxRounds !== null && (!Number.isInteger(maxRounds) || maxRounds < 1)) throw new Error("Nombre de manches invalide");
   if (!Number.isInteger(legsToWin) || legsToWin < 1 || legsToWin > 9) throw new Error("Nombre de legs invalide");

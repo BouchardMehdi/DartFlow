@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createX01Game, registerX01Throw } from "@/src/game-engine/x01";
 import type { DartThrow, GameState, Player } from "@/src/game-engine/types";
+import { gameStateSchema } from "@/src/database/schemas";
 
 const players: Player[] = [{ id: "p1", name: "Alice", order: 0 }, { id: "p2", name: "Bob", order: 1 }];
 const dart = (segment: number, multiplier: 1 | 2 | 3): DartThrow => ({ id: crypto.randomUUID(), segment, multiplier, score: segment * multiplier, zone: multiplier === 2 ? "double" : multiplier === 3 ? "triple" : "single-inner", thrownAt: new Date().toISOString() });
@@ -11,7 +12,21 @@ const withScore = (state: GameState, score: number): GameState => {
 };
 
 describe("X01", () => {
-  it.each([301, 501, 701] as const)("initialise une partie en %i", (score) => {
+  it.each([901, 1101, 1501] as const)("sauvegarde et reprend une partie en %i après un lancer", score => {
+    const game = registerX01Throw(createX01Game(players, score, "straight", "double"), dart(20, 3)).state;
+    const restored = gameStateSchema.parse(JSON.parse(JSON.stringify(game))) as GameState;
+    expect(restored.modeState).toMatchObject({ startingScore: score, players: { p1: { score: score - 60 }, p2: { score } } });
+    expect(restored.currentTurn.scoreBeforeTurn).toBe(score);
+    expect(registerX01Throw(restored, dart(20, 2)).state.currentTurn.scoreAfterTurn).toBe(score - 100);
+  });
+  it.each([901, 1101, 1501] as const)("repart du bon score au leg suivant en %i", score => {
+    const game = createX01Game(players, score, "straight", "double", null, 2, 1);
+    const next = registerX01Throw(withScore(game, 40), dart(20, 2)).state;
+    expect(next.status).toBe("in-progress");
+    expect(next.modeState).toMatchObject({ startingScore: score, players: { p1: { score, legsWon: 1 }, p2: { score } } });
+    expect(next.currentTurn.scoreBeforeTurn).toBe(score);
+  });
+  it.each([301, 501, 701, 901, 1101, 1501] as const)("initialise une partie en %i", (score) => {
     const state = createX01Game(players, score, "straight", "double");
     expect(state.modeState.kind === "x01" && state.modeState.players.p1?.score).toBe(score);
   });

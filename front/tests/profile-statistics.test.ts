@@ -15,19 +15,22 @@ describe("buildProfileStatistics", () => {
     expect(result[0]?.modes[0]?.label).toBe("Count-Up");
   });
 
-  it("sépare les statistiques 301, 501 et 701", () => {
+  it("sépare les statistiques des variantes du Classique", () => {
     const profile: SavedPlayer = { id: "p1", name: "Alice", order: 0, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
-    const games = ([301, 501, 701] as const).map((score) => {
+    const games = ([301, 501, 701, 901, 1101, 1501] as const).map((score) => {
       const game = createX01Game([{ id: "p1", name: "Alice", order: 0 }], score, "straight", "double");
       return { ...game, status: "completed" as const, winnerId: "p1", completedAt: game.updatedAt };
     });
 
     const result = buildProfileStatistics([profile], games);
 
-    expect(result[0]?.modes.map(({ key, label, games: count }) => ({ key, label, count }))).toEqual([
+    expect(result[0]?.modes.map(({ key, label, games: count }) => ({ key, label, count })).sort((a, b) => Number(a.label) - Number(b.label))).toEqual([
       { key: "x01-301", label: "301", count: 1 },
       { key: "x01-501", label: "501", count: 1 },
       { key: "x01-701", label: "701", count: 1 },
+      { key: "x01-901", label: "901", count: 1 },
+      { key: "x01-1101", label: "1101", count: 1 },
+      { key: "x01-1501", label: "1501", count: 1 },
     ]);
   });
 });

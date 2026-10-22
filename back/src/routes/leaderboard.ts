@@ -1,9 +1,10 @@
+import { X01_STARTING_SCORES } from "@dartflow/shared";
 import type { LeaderboardRow } from "@dartflow/shared";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { pool } from "../database.js";
 
-const querySchema = z.object({ mode: z.enum(["count-up", "301", "501", "701", "around-the-clock", "shanghai", "cricket", "killer"]).optional() });
+const querySchema = z.object({ mode: z.enum(["count-up", ...X01_STARTING_SCORES.map(String), "around-the-clock", "shanghai", "cricket", "killer"]).optional() });
 interface Row { profile_id: string; name: string; owner_username: string; games: string; wins: string; darts_thrown: string; points_scored: string; best_turn: number }
 
 const leaderboardRoutes: FastifyPluginAsync = async (app) => {
@@ -11,7 +12,7 @@ const leaderboardRoutes: FastifyPluginAsync = async (app) => {
     const parsed = querySchema.safeParse(request.query); if (!parsed.success) return reply.code(400).send({ message: "Filtre invalide." });
     const params: unknown[] = [];
     const selectedMode = parsed.data.mode;
-    const modeFilter = selectedMode === "301" || selectedMode === "501" || selectedMode === "701"
+    const modeFilter = X01_STARTING_SCORES.some(score => String(score) === selectedMode)
       ? (params.push("x01", selectedMode), "AND g.mode_id=$1 AND g.state->'modeState'->>'startingScore'=$2")
       : selectedMode
         ? (params.push(selectedMode), "AND g.mode_id=$1")
