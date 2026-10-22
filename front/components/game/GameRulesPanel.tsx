@@ -3,6 +3,7 @@
 import { motion } from "motion/react";
 import { useEffect, useRef } from "react";
 import type { GameState } from "@/src/game-engine/types";
+import { CRICKET_VARIANTS } from "@/src/game-engine/cricket-targets";
 
 interface Props { game: GameState; onClose: () => void; }
 interface RuleContent { title: string; introduction: string; sections: { title: string; items: string[] }[]; }
@@ -53,13 +54,14 @@ function rulesFor(game: GameState): RuleContent {
     ],
   };
   if (state.kind === "cricket") {
-    const variant = state.variant === "standard" ? ["Les marques au-delà de la troisième rapportent des points tant qu’au moins un adversaire n’a pas fermé la cible.", "Pour gagner, fermez toutes les cibles avec un score supérieur ou égal à ceux des adversaires."] : state.variant === "no-score" ? ["Aucun point n’est marqué dans cette variante.", "Le premier joueur qui ferme toutes les cibles gagne immédiatement."] : ["Les marques au-delà de la troisième donnent des points aux adversaires qui n’ont pas encore fermé la cible.", "Pour gagner, fermez toutes les cibles avec le score le plus faible."];
+    const variant = state.variant === "no-score" ? ["Aucun point n’est marqué dans cette variante.", "Le premier joueur qui ferme toutes les cibles gagne immédiatement."] : state.variant === "cut-throat" ? ["Les marques au-delà de la troisième donnent des points aux adversaires qui n’ont pas encore fermé la cible.", "Pour gagner, fermez toutes les cibles avec le score le plus faible."] : ["Les marques au-delà de la troisième rapportent des points tant qu’au moins un adversaire n’a pas fermé la cible.", "Pour gagner, fermez toutes les cibles avec un score supérieur ou égal à ceux des adversaires."];
     return {
-      title: state.variant === "standard" ? "Cricket standard" : state.variant === "no-score" ? "Cricket sans points" : "Cut-Throat Cricket",
-      introduction: "Fermez les secteurs 20, 19, 18, 17, 16, 15 et le bull.",
+      title: CRICKET_VARIANTS[state.variant],
+      introduction: state.variant === "random" || state.variant === "hidden" ? "Fermez six numéros distincts tirés au hasard entre 1 et 20, ainsi que le bull." : "Fermez les secteurs 20, 19, 18, 17, 16, 15 et le bull.",
       sections: [
         { title: "Marques", items: ["Il faut trois marques pour fermer une cible : un simple vaut 1 marque, un double 2 et un triple 3.", "Le bull extérieur vaut 1 marque et le bull intérieur 2 marques."] },
         { title: "Règle de cette variante", items: variant },
+        ...(state.variant === "random" || state.variant === "hidden" ? [{ title: state.variant === "hidden" ? "Découverte des cibles" : "Tirage des cibles", items: [state.variant === "hidden" ? "Les sept cibles, y compris le bull, sont masquées par un point d’interrogation. La première touche d’une cible la révèle pour tous et compte immédiatement ses marques." : "Les sept cibles sont visibles dès le début et sont les mêmes pour tous les joueurs.", "Le tirage reste identique pendant toute la partie. Un secteur hors du tirage ne compte pas."] }] : []),
         { title: "Limite", items: [state.maxRounds === null ? "La partie continue jusqu’à ce qu’un joueur remplisse la condition de victoire." : `Après ${state.maxRounds} manches, les fermetures départagent d’abord les joueurs, puis leur score.`] },
       ],
     };

@@ -83,13 +83,16 @@ export interface ShanghaiModeState {
   scores: Record<string, number>;
 }
 
-export type CricketTarget = 20 | 19 | 18 | 17 | 16 | 15 | "bull";
-export type CricketVariant = "standard" | "no-score" | "cut-throat";
-export interface CricketPlayerState { score: number; marks: Record<CricketTarget, number>; }
+export type CricketTarget = number | "bull";
+export type CricketVariant = "standard" | "no-score" | "cut-throat" | "random" | "hidden";
+export interface CricketPlayerState { score: number; marks: Partial<Record<CricketTarget, number>>; }
 export interface CricketModeState {
   kind: "cricket";
   variant: CricketVariant;
   maxRounds: number | null;
+  /** Absent in legacy games, which use the standard targets. */
+  targets?: CricketTarget[];
+  revealedTargets?: CricketTarget[];
   players: Record<string, CricketPlayerState>;
 }
 

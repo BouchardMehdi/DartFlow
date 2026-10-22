@@ -1,3 +1,4 @@
+import { countClosedCricketTargets } from "./cricket-targets";
 import type { GameState } from "./types";
 
 export interface FinalStanding {
@@ -17,7 +18,7 @@ export interface FinalStanding {
 export function getFinalStandings(game: GameState): FinalStanding[] {
   const scoreFor = (playerId: string) => game.modeState.kind === "count-up" || game.modeState.kind === "shanghai" ? game.modeState.scores[playerId] ?? 0 : game.modeState.kind === "x01" || game.modeState.kind === "cricket" ? game.modeState.players[playerId]?.score ?? 0 : game.modeState.kind === "killer" ? game.modeState.players[playerId]?.lives ?? 0 : game.modeState.kind === "training" ? game.modeState.score : game.modeState.players[playerId]?.target ?? 1;
   const sorted = [...game.players].sort((a, b) => {
-    const cricketDifference = game.modeState.kind === "cricket" ? Object.values(game.modeState.players[b.id]?.marks ?? {}).filter((marks) => marks >= 3).length - Object.values(game.modeState.players[a.id]?.marks ?? {}).filter((marks) => marks >= 3).length : 0;
+    const cricketDifference = game.modeState.kind === "cricket" ? countClosedCricketTargets(game.modeState, b.id) - countClosedCricketTargets(game.modeState, a.id) : 0;
     const cricketScoreDifference = game.modeState.kind === "cricket" ? game.modeState.variant === "cut-throat" ? scoreFor(a.id) - scoreFor(b.id) : scoreFor(b.id) - scoreFor(a.id) : 0;
     const x01ProgressDifference = game.modeState.kind === "x01" ? (game.modeState.players[b.id]?.setsWon ?? 0) - (game.modeState.players[a.id]?.setsWon ?? 0) || (game.modeState.players[b.id]?.legsWon ?? 0) - (game.modeState.players[a.id]?.legsWon ?? 0) : 0;
     const winnerDifference = a.id === game.winnerId ? -1 : b.id === game.winnerId ? 1 : 0;

@@ -27,7 +27,7 @@ const gameModeKeySql = `CASE
   WHEN g.mode_id='training' THEN 'training-' || COALESCE(g.state#>>'{modeState,trainingType}','inconnu')
   ELSE g.mode_id END`;
 const gameModeLabel = (key: string): string => {
-  const labels: Record<string, string> = { "count-up": "Count-Up", "x01-301": "301", "x01-501": "501", "x01-701": "701", "around-the-clock": "Around the Clock", shanghai: "Shanghai", "cricket-standard": "Cricket standard", "cricket-no-score": "Cricket sans points", "cricket-cut-throat": "Cut-Throat Cricket", killer: "Killer", "training-doubles": "Entraînement doubles", "training-triples": "Entraînement triples", "training-checkout": "Checkout Challenge", "training-bobs-27": "Bob’s 27", "training-random-target": "Cible aléatoire" };
+  const labels: Record<string, string> = { "count-up": "Count-Up", "x01-301": "301", "x01-501": "501", "x01-701": "701", "around-the-clock": "Around the Clock", shanghai: "Shanghai", "cricket-random": "Random Cricket", "cricket-hidden": "Hidden Cricket", "cricket-standard": "Cricket standard", "cricket-no-score": "Cricket sans points", "cricket-cut-throat": "Cut-Throat Cricket", killer: "Killer", "training-doubles": "Entraînement doubles", "training-triples": "Entraînement triples", "training-checkout": "Checkout Challenge", "training-bobs-27": "Bob’s 27", "training-random-target": "Cible aléatoire" };
   return labels[key] ?? key;
 };
 
