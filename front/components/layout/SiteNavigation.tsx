@@ -29,11 +29,11 @@ export function SiteNavigation() {
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-[#0d0f0e]/95 backdrop-blur-xl">
-        <div className="mx-auto flex min-h-18 max-w-6xl items-center gap-3 px-4 sm:px-7">
+        <div className="mx-auto flex min-h-18 max-w-6xl items-center gap-2 px-3 sm:gap-3 sm:px-7">
           <Link
             href="/"
             onClick={() => setOpen(false)}
-            className="flex min-w-0 items-center gap-3"
+            className="flex min-w-0 items-center gap-2 sm:gap-3"
           >
             <span className="relative size-11 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black shadow-lg shadow-black/30">
               <Image
@@ -46,7 +46,7 @@ export function SiteNavigation() {
               />
             </span>
             <span className="min-w-0">
-              <strong className="block text-lg leading-none tracking-[-.04em]">
+              <strong className="block truncate text-sm leading-none sm:text-lg tracking-[-.04em]">
                 DARTFLOW
               </strong>
               <span className="mt-1 hidden text-[9px] uppercase tracking-[.22em] text-[var(--muted)] sm:block">
@@ -71,7 +71,7 @@ export function SiteNavigation() {
             ))}
           </nav>
 
-          <div className="ml-auto flex items-center gap-2 lg:ml-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2 lg:ml-2">
             <NotificationBell />
             <AccountHeaderAvatar />
           </div>
@@ -80,7 +80,7 @@ export function SiteNavigation() {
             aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
             aria-expanded={open}
             onClick={() => setOpen((current) => !current)}
-            className="grid size-11 place-items-center rounded-xl border border-[var(--line)] text-xl lg:hidden"
+            className="grid size-11 shrink-0 place-items-center rounded-xl border border-[var(--line)] text-xl lg:hidden"
           >
             {open ? "×" : "☰"}
           </button>
@@ -97,9 +97,9 @@ export function SiteNavigation() {
           />
           <nav
             aria-label="Navigation mobile"
-            className="fixed right-4 top-20 z-50 w-[min(19rem,calc(100vw-2rem))] rounded-2xl border border-[var(--line)] bg-[#141715] p-2 shadow-2xl shadow-black/70 lg:hidden"
+            className="fixed right-4 top-20 z-50 max-h-[calc(100dvh-6rem)] overflow-y-auto w-[min(19rem,calc(100vw-2rem))] rounded-2xl border border-[var(--line)] bg-[#141715] p-2 shadow-2xl shadow-black/70 lg:hidden"
           >
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-2 gap-1.5">
               {links.map((link) => (
                 <Link
                   key={link.href}

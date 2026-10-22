@@ -9,6 +9,7 @@ test("configure puis démarre un Count-Up sur mobile", async ({ page }) => {
   await page.getByLabel("Ordre de passage aléatoire").check();
   await page.getByRole("button", { name: /Démarrer la partie/ }).click();
   await expect(page, `Erreurs navigateur : ${pageErrors.join(" | ")}`).toHaveURL(/\/game$/);
+  await page.getByRole("button", { name: "Cible", exact: true }).click();
   await expect(page.getByRole("group", { name: /cible/i })).toBeVisible();
   await expect(page.getByText("Alice", { exact: true }).first()).toBeVisible();
 });

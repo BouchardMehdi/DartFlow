@@ -203,7 +203,7 @@ export function ClubChatScreen({ clubId }: { clubId: string }) {
   );
 
   return (
-    <main className="mx-auto flex h-[calc(100dvh-4.5rem)] max-w-4xl flex-col overflow-hidden px-4 py-5 sm:px-7 sm:py-8">
+    <main className="mx-auto flex h-[calc(100dvh-4.5rem)] max-w-4xl flex-col overflow-hidden px-4 pt-5 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-7 sm:pt-8">
       <header className="flex items-center justify-between gap-4 border-b border-[var(--line)] pb-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-[var(--lime)]/40 bg-[var(--panel)]">
@@ -380,7 +380,7 @@ export function ClubChatScreen({ clubId }: { clubId: string }) {
 
       {selectedMessage && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-5 backdrop-blur-[2px]"
+          className="fixed inset-0 z-[70] overflow-y-auto overscroll-contain bg-black/80 p-5 backdrop-blur-[2px]"
           onClick={(event) => {
             if (event.target === event.currentTarget) closeActions();
           }}
@@ -389,9 +389,9 @@ export function ClubChatScreen({ clubId }: { clubId: string }) {
             role="dialog"
             aria-modal="true"
             aria-label={editing ? "Modifier le message" : "Actions du message"}
-            className="w-full max-w-sm"
+            className="mx-auto my-4 w-full max-w-sm"
           >
-            {!editing&&<div className="mb-2 ml-auto flex w-fit gap-1 rounded-full border border-white/10 bg-[#202220] p-1.5 shadow-2xl">{["👍","❤️","😂","🎯","🔥"].map(emoji=><button type="button" key={emoji} aria-label={`Réagir avec ${emoji}`} onClick={()=>void react(emoji)} disabled={working} className="grid size-9 place-items-center rounded-full text-lg transition hover:scale-110 hover:bg-white/10 disabled:opacity-40">{emoji}</button>)}</div>}
+            {!editing&&<div className="mb-2 ml-auto flex max-w-full w-fit flex-wrap gap-1 rounded-full border border-white/10 bg-[#202220] p-1.5 shadow-2xl">{["👍","❤️","😂","🎯","🔥"].map(emoji=><button type="button" key={emoji} aria-label={`Réagir avec ${emoji}`} onClick={()=>void react(emoji)} disabled={working} className="grid size-11 place-items-center rounded-full text-lg transition hover:scale-110 hover:bg-white/10 disabled:opacity-40">{emoji}</button>)}</div>}
             <div className="ml-auto max-w-[88%] rounded-2xl rounded-tr-sm bg-[var(--lime)] px-4 py-3 text-black shadow-2xl">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <strong className="text-xs">@{selectedMessage.authorUsername}</strong>
